@@ -18,6 +18,11 @@ workflows:
     artifacts:
       - app/build/ios/iphonesimulator/*.app
 
+  # Linux/Windows build minutes require billing enabled on the Codemagic
+  # account (unlike mac_mini_m2, which has free-tier minutes) — this
+  # workflow will fail with "instance type not available with the current
+  # billing plan" until billing is turned on. Local Android builds work
+  # fine for now (see the Android build notes elsewhere in the repo).
   android-debug:
     name: Android (debug APK)
     max_build_duration: 60

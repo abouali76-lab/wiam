@@ -1,0 +1,14 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 820, "h": 1180 },
+    { "file": "ChildTimer.dc.html", "x": 940, "y": 0, "w": 820, "h": 1180 },
+    { "file": "ChildTimeUp.dc.html", "x": 1880, "y": 0, "w": 820, "h": 1180 },
+    { "file": "ParentDashboard.dc.html", "x": 0, "y": 1320, "w": 390, "h": 844 },
+    { "file": "ParentFreeze.dc.html", "x": 510, "y": 1320, "w": 390, "h": 844 }
+  ],
+  "annotations": [
+    { "id": "row-child", "x": 0, "y": -70, "w": 500, "text": "واجهات الطفل — آيباد" },
+    { "id": "row-parent", "x": 0, "y": 1250, "w": 500, "text": "واجهات ولي الأمر — الجوال" }
+  ],
+  "launch": { "view": "canvas" }
+}

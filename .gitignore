@@ -1,0 +1,11 @@
+# Backend
+backend/node_modules/
+backend/dev.db
+backend/dev.db-journal
+backend/.env
+
+# OS
+.DS_Store
+Thumbs.db
+app/android/build/
+backend/server.log

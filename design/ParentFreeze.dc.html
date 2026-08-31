@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+Bhaijaan+2:wght@600;700;800&family=Tajawal:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --bg: oklch(97% 0.012 80);
+    --card: oklch(99% 0.004 90);
+    --line: oklch(90% 0.012 80);
+    --ink: oklch(28% 0.03 265);
+    --ink-muted: oklch(54% 0.02 265);
+    --amber: oklch(78% 0.14 75);
+    --teal: oklch(70% 0.10 195);
+    --teal-deep: oklch(52% 0.09 195);
+    --coral: oklch(66% 0.16 25);
+    --coral-deep: oklch(52% 0.15 22);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  a{color:var(--teal-deep);} a:hover{color:var(--teal-deep);}
+  .wrap{font-family:'Tajawal', Tahoma, Arial, sans-serif;background:var(--bg);color:var(--ink);}
+  .display{font-family:'Baloo Bhaijaan 2', Tahoma, Arial, sans-serif;}
+  .header{display:flex;align-items:center;justify-content:space-between;}
+  .avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg, var(--teal), var(--amber));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;}
+  .session-card{
+    background:var(--card);border:1px solid var(--line);border-radius:24px;padding:26px;
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+  }
+  .session-tag{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--teal-deep);background:oklch(94% 0.03 195);padding:6px 14px;border-radius:999px;}
+  .ring-wrap{position:relative;width:150px;height:150px;}
+  .ring-wrap svg{transform:rotate(-90deg);}
+  .time-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;}
+  .time-num .n{font-family:'Baloo Bhaijaan 2';font-size:34px;font-weight:800;}
+  .time-num .l{font-size:11px;color:var(--ink-muted);}
+  .freeze-btn{
+    background:linear-gradient(135deg, var(--coral), var(--coral-deep));
+    border-radius:24px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:10px;
+    box-shadow:0 16px 30px oklch(50% 0.15 25 / .35);
+  }
+  .freeze-icon{width:56px;height:56px;border-radius:50%;background:oklch(100% 0 0 / .18);display:flex;align-items:center;justify-content:center;}
+  .freeze-title{color:white;font-size:22px;font-weight:800;}
+  .freeze-note{font-size:13px;color:var(--ink-muted);text-align:center;line-height:1.6;max-width:280px;}
+  .children-row{display:flex;gap:12px;align-items:center;}
+  .child-pick{display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .pick-avatar{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;}
+  .pick-name{font-size:12px;color:var(--ink-muted);}
+</style>
+</helmet>
+
+<div class="wrap" dir="rtl" style="width:390px;height:844px;padding:26px 22px;display:flex;flex-direction:column;gap:24px;">
+  <div class="header">
+    <div class="display" style="font-size:20px;font-weight:700;">التحكم الفوري</div>
+    <div class="avatar">أ</div>
+  </div>
+
+  <div style="font-size:13px;font-weight:700;color:var(--ink-muted);">الطفل</div>
+  <div class="children-row">
+    <div class="child-pick">
+      <div class="pick-avatar" style="background:linear-gradient(135deg, var(--teal), var(--amber));box-shadow:0 0 0 3px var(--teal-deep);">أ</div>
+      <div class="pick-name" style="color:var(--teal-deep);font-weight:700;">أحمد</div>
+    </div>
+    <div class="child-pick">
+      <div class="pick-avatar" style="background:oklch(90% 0.02 80);color:var(--ink-muted);">س</div>
+      <div class="pick-name">سارة</div>
+    </div>
+  </div>
+
+  <div class="session-card">
+    <div class="session-tag">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+      كوكب الألعاب مفتوح الآن
+    </div>
+    <div class="ring-wrap">
+      <svg width="150" height="150" viewBox="0 0 150 150" fill="none">
+        <circle cx="75" cy="75" r="64" stroke="oklch(92% 0.01 80)" stroke-width="10"/>
+        <circle cx="75" cy="75" r="64" stroke="var(--amber)" stroke-width="10" stroke-linecap="round" stroke-dasharray="402" stroke-dashoffset="120"/>
+      </svg>
+      <div class="time-num"><div class="n">12:45</div><div class="l">متبقٍ</div></div>
+    </div>
+  </div>
+
+  <div style="flex:1;"></div>
+
+  <div class="freeze-btn">
+    <div class="freeze-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2v20M4.9 5 19.1 19M19.1 5 4.9 19M2 12h20"/>
+      </svg>
+    </div>
+    <div class="freeze-title display">تجميد فوري</div>
+  </div>
+  <div class="freeze-note">سيتم قفل اللعبة على آيباد أحمد فوراً، حتى لو لم ينتهِ الوقت المخصص له</div>
+</div>
+</x-dc>
+</body>
+</html>

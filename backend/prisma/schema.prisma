@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Parent {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  pinHash   String
+  createdAt DateTime @default(now())
+  children  Child[]
+}
+
+model Child {
+  id          String        @id @default(cuid())
+  parentId    String
+  parent      Parent        @relation(fields: [parentId], references: [id])
+  name        String
+  timezone    String        @default("Asia/Riyadh")
+  deviceToken String?       @unique
+  createdAt   DateTime      @default(now())
+  tasks       Task[]
+  sessions    PlaySession[]
+}
+
+// A recurring daily task template (digital = auto-verified in-app lesson,
+// external = real-world task the parent confirms manually).
+model Task {
+  id            String           @id @default(cuid())
+  childId       String
+  child         Child            @relation(fields: [childId], references: [id])
+  title         String
+  type          String // "digital" | "external"
+  rewardMinutes Int
+  proofAllowed  Boolean          @default(false)
+  active        Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+  completions   TaskCompletion[]
+}
+
+// One row per task per calendar day (in the child's timezone) — this is what
+// makes the daily reset implicit: a new day has no row until the task is
+// touched, so nothing needs a nightly cron job to "clear" it.
+model TaskCompletion {
+  id          String    @id @default(cuid())
+  taskId      String
+  task        Task      @relation(fields: [taskId], references: [id])
+  date        String // "YYYY-MM-DD" in the child's timezone
+  status      String    @default("pending") // "pending" | "completed"
+  verifiedBy  String? // "system" | "parent"
+  proofUrl    String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([taskId, date])
+}
+
+// A play window the child has actually opened. durationSec is fixed at
+// creation time from the minutes earned but not yet spent; remaining time is
+// always derived from startedAt + durationSec on the server, never trusted
+// from the client. frozenAt short-circuits remaining time to zero instantly.
+model PlaySession {
+  id          String    @id @default(cuid())
+  childId     String
+  child       Child     @relation(fields: [childId], references: [id])
+  startedAt   DateTime  @default(now())
+  durationSec Int
+  frozenAt    DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+}

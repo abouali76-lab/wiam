@@ -1,0 +1,308 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../models.dart';
+import '../state/parent_state.dart';
+import '../theme.dart';
+import 'mode_select_screen.dart';
+import 'parent_freeze_screen.dart';
+
+class ParentDashboardScreen extends StatefulWidget {
+  const ParentDashboardScreen({super.key});
+
+  @override
+  State<ParentDashboardScreen> createState() => _ParentDashboardScreenState();
+}
+
+class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
+  int tabIndex = 0; // 0 = digital, 1 = external
+  bool _issuingDeviceToken = false;
+
+  Future<void> _addTask(ParentChildSummary child) async {
+    final parentState = context.read<ParentAppState>();
+    final titleCtrl = TextEditingController();
+    final minutesCtrl = TextEditingController(text: '15');
+    String type = 'digital';
+    bool proofAllowed = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('مهمة جديدة', style: bodyFont(fontWeight: FontWeight.w700)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'عنوان المهمة')),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: type,
+                decoration: const InputDecoration(labelText: 'النوع'),
+                items: const [
+                  DropdownMenuItem(value: 'digital', child: Text('رقمي (تحقق تلقائي)')),
+                  DropdownMenuItem(value: 'external', child: Text('خارجي (تأكيدك مطلوب)')),
+                ],
+                onChanged: (v) => setDialogState(() => type = v!),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: minutesCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'مكافأة الدقائق'),
+              ),
+              if (type == 'external')
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('السماح بإرفاق صورة كإثبات', style: bodyFont(fontSize: 13)),
+                  value: proofAllowed,
+                  onChanged: (v) => setDialogState(() => proofAllowed = v ?? false),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () async {
+                final minutes = int.tryParse(minutesCtrl.text.trim()) ?? 0;
+                if (titleCtrl.text.trim().isEmpty || minutes <= 0) return;
+                await parentState.api.post('/api/parent/children/${child.childId}/tasks', asParent: true, body: {
+                  'title': titleCtrl.text.trim(),
+                  'type': type,
+                  'rewardMinutes': minutes,
+                  'proofAllowed': proofAllowed,
+                });
+                if (ctx.mounted) Navigator.pop(ctx);
+                await parentState.refreshChildren();
+              },
+              child: const Text('إضافة'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDeviceToken(ParentChildSummary child) async {
+    // Issuing a token regenerates it server-side, invalidating any token
+    // already on screen — guard against a double-tap silently orphaning
+    // whatever this dialog is about to show.
+    if (_issuingDeviceToken) return;
+    setState(() => _issuingDeviceToken = true);
+    final String token;
+    try {
+      token = await context.read<ParentAppState>().issueDeviceToken(child.childId);
+    } finally {
+      if (mounted) setState(() => _issuingDeviceToken = false);
+    }
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('ربط آيباد ${child.name}', style: bodyFont(fontWeight: FontWeight.w700)),
+        content: SelectableText(token, style: bodyFont(fontSize: 15)),
+        actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('تم'))],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parent = context.watch<ParentAppState>();
+    if (parent.children.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final child = parent.children.first;
+    final digitalTasks = child.state.tasks.where((t) => t.isDigital).toList();
+    final externalTasks = child.state.tasks.where((t) => !t.isDigital).toList();
+    final tasks = tabIndex == 0 ? digitalTasks : externalTasks;
+    final earnedMinutes = child.state.earnedMinutesToday;
+    final possibleMinutes = child.state.tasks.fold<int>(0, (sum, t) => sum + t.rewardMinutes);
+
+    return Scaffold(
+      backgroundColor: WiamColors.bgLight,
+      appBar: AppBar(
+        backgroundColor: WiamColors.bgLight,
+        elevation: 0,
+        foregroundColor: WiamColors.inkLight,
+        title: Text('مهام اليوم', style: displayFont(fontSize: 20, fontWeight: FontWeight.w700, color: WiamColors.inkLight)),
+        actions: [
+          IconButton(icon: const Icon(Icons.shield_outlined), tooltip: 'التحكم الفوري', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ParentFreezeScreen(child: child)))),
+          IconButton(icon: const Icon(Icons.smartphone), tooltip: 'ربط آيباد', onPressed: _issuingDeviceToken ? null : () => _showDeviceToken(child)),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await context.read<ParentAppState>().logout();
+              if (context.mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const ModeSelectScreen()), (_) => false);
+            },
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: WiamColors.tealDeepLight,
+        onPressed: () => _addTask(child),
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => parent.refreshChildren(),
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _SummaryCard(earnedMinutes: earnedMinutes, possibleMinutes: possibleMinutes),
+            const SizedBox(height: 20),
+            _Tabs(index: tabIndex, onChanged: (i) => setState(() => tabIndex = i)),
+            const SizedBox(height: 16),
+            for (final task in tasks) ...[
+              _TaskCard(
+                task: task,
+                onConfirm: task.isDigital || task.isDone ? null : () => context.read<ParentAppState>().confirmExternalTask(task.taskId),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (tasks.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Text('لا توجد مهام من هذا النوع بعد', textAlign: TextAlign.center, style: bodyFont(color: WiamColors.inkMutedLight)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final int earnedMinutes;
+  final int possibleMinutes;
+  const _SummaryCard({required this.earnedMinutes, required this.possibleMinutes});
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = possibleMinutes == 0 ? 0.0 : (earnedMinutes / possibleMinutes).clamp(0, 1).toDouble();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(colors: [WiamColors.amberLight, WiamColors.amberDeepLight], begin: Alignment.topRight, end: Alignment.bottomLeft),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.star_rounded, color: Color(0xFF3D2A0E), size: 22),
+            const SizedBox(width: 8),
+            Text('وقت لعب مكتسب اليوم', style: bodyFont(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E))),
+          ]),
+          const SizedBox(height: 10),
+          Text('$earnedMinutes دقيقة', style: displayFont(fontSize: 30, fontWeight: FontWeight.w800, color: const Color(0xFF3D2A0E))),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(value: ratio, minHeight: 8, backgroundColor: Colors.white.withValues(alpha: 0.35), color: const Color(0xFF3D2A0E)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Tabs extends StatelessWidget {
+  final int index;
+  final ValueChanged<int> onChanged;
+  const _Tabs({required this.index, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(color: const Color(0xFFEDE8DC), borderRadius: BorderRadius.circular(16)),
+      child: Row(children: [
+        Expanded(child: _TabButton(label: 'الدروس الرقمية', selected: index == 0, onTap: () => onChanged(0))),
+        Expanded(child: _TabButton(label: 'المهام الخارجية', selected: index == 1, onTap: () => onChanged(1))),
+      ]),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TabButton({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? WiamColors.cardLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: selected ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8)] : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(label, style: bodyFont(fontSize: 13.5, fontWeight: FontWeight.w700, color: selected ? WiamColors.tealDeepLight : WiamColors.inkMutedLight)),
+      ),
+    );
+  }
+}
+
+class _TaskCard extends StatelessWidget {
+  final TaskItem task;
+  final VoidCallback? onConfirm;
+  const _TaskCard({required this.task, required this.onConfirm});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: WiamColors.cardLight, borderRadius: BorderRadius.circular(18), border: Border.all(color: WiamColors.lineLight)),
+      child: Row(children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(color: WiamColors.tealTintLight, borderRadius: BorderRadius.circular(14)),
+          child: Icon(task.isDigital ? Icons.chat_bubble_outline : Icons.checklist_rtl, color: WiamColors.tealDeepLight, size: 20),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(task.title, style: bodyFont(fontSize: 15.5, fontWeight: FontWeight.w700, color: WiamColors.inkLight)),
+              const SizedBox(height: 2),
+              Text(
+                task.isDigital ? 'تحقق تلقائي من التطبيق' : (task.proofAllowed ? 'يمكن إرفاق صورة كإثبات (اختياري)' : 'يتطلب تأكيدك'),
+                style: bodyFont(fontSize: 12.5, color: WiamColors.inkMutedLight),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        if (onConfirm != null)
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: WiamColors.tealDeepLight, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+            onPressed: onConfirm,
+            icon: const Icon(Icons.check, size: 14, color: Colors.white),
+            label: Text('تأكيد الإنجاز', style: bodyFont(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white)),
+          )
+        else
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: task.isDone ? WiamColors.tealTintLight : const Color(0xFFEDE8DC),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(task.isDone ? 'مكتمل' : 'قيد الانتظار',
+                  style: bodyFont(fontSize: 11.5, fontWeight: FontWeight.w700, color: task.isDone ? WiamColors.tealDeepLight : WiamColors.inkMutedLight)),
+            ),
+            const SizedBox(height: 6),
+            Text('+${task.rewardMinutes} د', style: displayFont(fontSize: 13, fontWeight: FontWeight.w700, color: WiamColors.amberDeepLight)),
+          ]),
+      ]),
+    );
+  }
+}

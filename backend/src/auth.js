@@ -38,10 +38,12 @@ function generateDeviceToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
-// 6 digits, human-typeable — this is a one-time pairing code, never the
+// 3 digits, human-typeable — this is a one-time pairing code, never the
 // long-term auth credential (see the schema comment on Child.pairingCode).
+// Deliberately short-lived (see PAIRING_CODE_TTL_MS) since a 3-digit space
+// is small (1000 combinations).
 function generatePairingCode() {
-  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+  return String(crypto.randomInt(0, 1_000)).padStart(3, "0");
 }
 
 module.exports = { signParentToken, requireParent, requireChildDevice, generateDeviceToken, generatePairingCode };

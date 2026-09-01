@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/parent_state.dart';
+import '../storage.dart';
 import '../theme.dart';
 import 'parent_dashboard_screen.dart';
 
@@ -14,11 +15,30 @@ class ParentAuthScreen extends StatefulWidget {
 
 class _ParentAuthScreenState extends State<ParentAuthScreen> {
   bool isRegister = false;
+  bool rememberMe = false;
   final identifierCtrl = TextEditingController(); // login: email or username
   final emailCtrl = TextEditingController(); // register: email
   final usernameCtrl = TextEditingController(); // register: optional username
   final passwordCtrl = TextEditingController();
   final childNameCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillRememberedLogin();
+  }
+
+  Future<void> _prefillRememberedLogin() async {
+    final (identifier, password) = await Storage.loadRememberedLogin();
+    if (!mounted) return;
+    if (identifier != null) {
+      setState(() {
+        identifierCtrl.text = identifier;
+        rememberMe = true;
+        if (password != null) passwordCtrl.text = password;
+      });
+    }
+  }
 
   Future<void> _submit() async {
     final state = context.read<ParentAppState>();
@@ -30,7 +50,16 @@ class _ParentAuthScreenState extends State<ParentAuthScreen> {
             childNameCtrl.text.trim(),
           )
         : await state.login(identifierCtrl.text.trim(), passwordCtrl.text);
-    if (ok && mounted) {
+    if (!ok) return;
+
+    if (!isRegister) {
+      if (rememberMe) {
+        await Storage.saveRememberedLogin(identifierCtrl.text.trim(), passwordCtrl.text);
+      } else {
+        await Storage.clearRememberedLogin();
+      }
+    }
+    if (mounted) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ParentDashboardScreen()));
     }
   }
@@ -64,7 +93,14 @@ class _ParentAuthScreenState extends State<ParentAuthScreen> {
               if (isRegister) ...[
                 const SizedBox(height: 12),
                 TextField(controller: childNameCtrl, decoration: const InputDecoration(labelText: 'اسم الطفل')),
-              ],
+              ] else
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: rememberMe,
+                  onChanged: (v) => setState(() => rememberMe = v ?? false),
+                  title: Text('تذكرني على هذا الجهاز', style: bodyFont(fontSize: 13.5, color: WiamColors.inkLight)),
+                ),
               if (state.error != null) ...[
                 const SizedBox(height: 12),
                 Text(state.error!, style: bodyFont(color: WiamColors.coralDeep, fontSize: 13)),

@@ -6,6 +6,7 @@ import '../models.dart';
 import '../state/child_device_state.dart';
 import '../theme.dart';
 import 'child_play_screen.dart';
+import 'parent_entry_screen.dart';
 
 class ChildLockScreen extends StatefulWidget {
   const ChildLockScreen({super.key});
@@ -59,7 +60,7 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
               Row(children: [
                 Text('وئام', style: displayFont(fontSize: 20, fontWeight: FontWeight.w700, color: WiamColors.ink)),
                 const Spacer(),
-                IconButton(icon: const Icon(Icons.person_outline, color: WiamColors.inkMuted), onPressed: () => _showUnpair(context)),
+                IconButton(icon: const Icon(Icons.person_outline, color: WiamColors.inkMuted), onPressed: () => _showAccountMenu(context)),
               ]),
               Expanded(
                 child: SingleChildScrollView(
@@ -124,7 +125,43 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
     );
   }
 
-  void _showUnpair(BuildContext context) {
+  void _showAccountMenu(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('حساب ولي الأمر', style: bodyFont(fontWeight: FontWeight.w700)),
+        children: [
+          // Pushes on top of this screen without touching the child's
+          // pairing — both stay signed in at once, so coming back just
+          // pops this route. Still gated by the parent's own login.
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ParentEntryScreen()));
+            },
+            child: Row(children: [
+              const Icon(Icons.login, size: 20, color: WiamColors.inkMuted),
+              const SizedBox(width: 12),
+              Text('الدخول كولي أمر', style: bodyFont(fontSize: 15)),
+            ]),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmUnpair(context);
+            },
+            child: Row(children: [
+              const Icon(Icons.link_off, size: 20, color: WiamColors.coralDeep),
+              const SizedBox(width: 12),
+              Text('إلغاء ربط هذا الجهاز', style: bodyFont(fontSize: 15, color: WiamColors.coralDeep)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmUnpair(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(

@@ -93,7 +93,10 @@ async function requireOwnChild(req, res, next) {
 // Issue a short-lived 6-digit code the child types into the iPad's pairing
 // screen. The device exchanges it once for a real deviceToken (POST
 // /api/child/pair) — the parent's own login credentials are never involved.
-const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
+// Shorter than before (was 10 min) — a 3-digit code is a much smaller
+// space (1000 combinations) than the previous 6-digit one, so it expires
+// faster to keep a brute-force window impractically small.
+const PAIRING_CODE_TTL_MS = 3 * 60 * 1000;
 
 router.post("/children/:childId/pairing-code", requireOwnChild, async (req, res) => {
   let pairingCode;

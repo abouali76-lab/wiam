@@ -16,6 +16,31 @@ class ParentDashboardScreen extends StatefulWidget {
   State<ParentDashboardScreen> createState() => _ParentDashboardScreenState();
 }
 
+// A starting point so a parent isn't stuck typing every task from a blank
+// field — tapping one just fills the form below, nothing is created until
+// "إضافة" is pressed, so they can still adjust the reward or title first.
+class _TaskPreset {
+  final String title;
+  final int rewardMinutes;
+  final bool proofAllowed;
+  const _TaskPreset(this.title, this.rewardMinutes, {this.proofAllowed = false});
+}
+
+const _digitalPresets = [
+  _TaskPreset('درس القراءة اليومي', 15),
+  _TaskPreset('درس الرياضيات', 15),
+  _TaskPreset('نشاط المهارات الاجتماعية', 10),
+  _TaskPreset('تمرين التركيز', 10),
+];
+
+const _externalPresets = [
+  _TaskPreset('ترتيب الغرفة', 15, proofAllowed: true),
+  _TaskPreset('غسل الأسنان', 5),
+  _TaskPreset('قراءة كتاب ورقي', 15, proofAllowed: true),
+  _TaskPreset('إنجاز الواجب المدرسي', 20, proofAllowed: true),
+  _TaskPreset('المساعدة في ترتيب المنزل', 10, proofAllowed: true),
+];
+
 class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
   int tabIndex = 0; // 0 = digital, 1 = external
   bool _issuingDeviceToken = false;
@@ -36,6 +61,24 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Text('اقتراحات جاهزة', style: bodyFont(fontSize: 12.5, color: WiamColors.inkMutedLight)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final preset in type == 'digital' ? _digitalPresets : _externalPresets)
+                    ActionChip(
+                      label: Text(preset.title, style: bodyFont(fontSize: 12)),
+                      onPressed: () => setDialogState(() {
+                        titleCtrl.text = preset.title;
+                        minutesCtrl.text = preset.rewardMinutes.toString();
+                        proofAllowed = preset.proofAllowed;
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
               TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'عنوان المهمة')),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(

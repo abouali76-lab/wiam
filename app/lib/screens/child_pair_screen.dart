@@ -7,6 +7,9 @@ import '../state/child_device_state.dart';
 import '../theme.dart';
 import 'child_lock_screen.dart';
 
+// Keep in sync with the backend's generatePairingCode() (backend/src/auth.js).
+const _pairingCodeLength = 3;
+
 class ChildPairScreen extends StatefulWidget {
   const ChildPairScreen({super.key});
 
@@ -20,7 +23,7 @@ class _ChildPairScreenState extends State<ChildPairScreen> {
   String? error;
 
   Future<void> _pair() async {
-    if (codeCtrl.text.trim().length != 6) return;
+    if (codeCtrl.text.trim().length != _pairingCodeLength) return;
     setState(() {
       loading = true;
       error = null;
@@ -48,7 +51,7 @@ class _ChildPairScreenState extends State<ChildPairScreen> {
             children: [
               Text('ربط هذا الآيباد', style: displayFont(fontSize: 26, fontWeight: FontWeight.w700, color: WiamColors.inkLight)),
               const SizedBox(height: 8),
-              Text('اطلب من ولي الأمر فتح "ربط آيباد" من تطبيقه، وأدخل الرمز المكوّن من 6 أرقام الظاهر لديه',
+              Text('اطلب من ولي الأمر فتح "ربط آيباد" من تطبيقه، وأدخل الرمز المكوّن من $_pairingCodeLength أرقام الظاهر لديه',
                   style: bodyFont(fontSize: 14, color: WiamColors.inkMutedLight, height: 1.6)),
               const SizedBox(height: 28),
               TextField(
@@ -56,12 +59,12 @@ class _ChildPairScreenState extends State<ChildPairScreen> {
                 autofocus: true,
                 textAlign: TextAlign.center,
                 keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(_pairingCodeLength)],
                 style: displayFont(fontSize: 36, fontWeight: FontWeight.w800, color: WiamColors.inkLight),
                 decoration: const InputDecoration(counterText: ''),
                 onChanged: (v) {
                   setState(() => error = null);
-                  if (v.length == 6) _pair();
+                  if (v.length == _pairingCodeLength) _pair();
                 },
               ),
               if (error != null) ...[

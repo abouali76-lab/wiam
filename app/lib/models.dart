@@ -71,6 +71,8 @@ class ChildState {
   final int earnedMinutesToday;
   final int availableSeconds;
   final SessionState? activeSession;
+  final bool paired;
+  final bool frozen;
 
   ChildState({
     required this.childId,
@@ -80,6 +82,8 @@ class ChildState {
     required this.earnedMinutesToday,
     required this.availableSeconds,
     required this.activeSession,
+    required this.paired,
+    required this.frozen,
   });
 
   factory ChildState.fromJson(Map<String, dynamic> json) => ChildState(
@@ -90,5 +94,7 @@ class ChildState {
         earnedMinutesToday: _asInt(json['earnedMinutesToday']),
         availableSeconds: _asInt(json['availableSeconds']),
         activeSession: json['activeSession'] == null ? null : SessionState.fromJson(json['activeSession']),
+        paired: json['paired'] ?? false,
+        frozen: json['frozen'] ?? false,
       );
 }

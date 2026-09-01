@@ -79,7 +79,7 @@ async function computeChildState(childId) {
   await ensureTodayRows(childId, date);
 
   const completions = await prisma.taskCompletion.findMany({
-    where: { date, task: { childId } },
+    where: { date, task: { childId, active: true } },
     include: { task: true },
   });
 
@@ -99,6 +99,8 @@ async function computeChildState(childId) {
     childId,
     childName: child.name,
     date,
+    paired: Boolean(child.deviceToken),
+    frozen: child.frozen,
     tasks: completions.map((c) => ({
       taskId: c.taskId,
       title: c.task.title,

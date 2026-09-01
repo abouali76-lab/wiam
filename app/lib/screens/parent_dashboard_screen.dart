@@ -128,6 +128,27 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
     );
   }
 
+  Future<void> _confirmDeleteTask(ParentChildSummary child, TaskItem task) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف هذه المهمة؟'),
+        content: Text('لن تظهر "${task.title}" بعد الآن، لكن سجل إنجازها السابق يبقى محفوظاً.', style: bodyFont(fontSize: 13.5, height: 1.6)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: WiamColors.coralDeep),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      await context.read<ParentAppState>().deleteTask(child.childId, task.taskId);
+    }
+  }
+
   Future<void> _showPairingCode(ParentChildSummary child) async {
     // Requesting a code regenerates it server-side, invalidating any code
     // already on screen — guard against a double-tap silently orphaning
@@ -236,6 +257,8 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            _PairingStatusChip(paired: child.state.paired, onTapConnect: _issuingDeviceToken ? null : () => _showPairingCode(child)),
+            const SizedBox(height: 14),
             _SummaryCard(earnedMinutes: earnedMinutes, possibleMinutes: possibleMinutes),
             const SizedBox(height: 20),
             _Tabs(index: tabIndex, onChanged: (i) => setState(() => tabIndex = i)),
@@ -244,6 +267,7 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
               _TaskCard(
                 task: task,
                 onConfirm: task.isDigital || task.isDone ? null : () => context.read<ParentAppState>().confirmExternalTask(task.taskId),
+                onDelete: () => _confirmDeleteTask(child, task),
               ),
               const SizedBox(height: 12),
             ],
@@ -340,7 +364,8 @@ class _TabButton extends StatelessWidget {
 class _TaskCard extends StatelessWidget {
   final TaskItem task;
   final VoidCallback? onConfirm;
-  const _TaskCard({required this.task, required this.onConfirm});
+  final VoidCallback onDelete;
+  const _TaskCard({required this.task, required this.onConfirm, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -390,7 +415,46 @@ class _TaskCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text('+${task.rewardMinutes} د', style: displayFont(fontSize: 13, fontWeight: FontWeight.w700, color: WiamColors.amberDeepLight)),
           ]),
+        IconButton(
+          icon: const Icon(Icons.delete_outline, size: 20, color: WiamColors.inkMutedLight),
+          tooltip: 'حذف المهمة',
+          onPressed: onDelete,
+        ),
       ]),
+    );
+  }
+}
+
+/// Surfaces whether the child's device currently holds a live pairing —
+/// otherwise a parent has no way to tell "not connected yet" apart from
+/// "connected but nothing happened today" just by looking at the task list.
+class _PairingStatusChip extends StatelessWidget {
+  final bool paired;
+  final VoidCallback? onTapConnect;
+  const _PairingStatusChip({required this.paired, required this.onTapConnect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: paired ? WiamColors.tealTintLight : const Color(0xFFF3E7E1),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: paired ? null : onTapConnect,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(children: [
+            Icon(paired ? Icons.check_circle_rounded : Icons.smartphone, size: 18, color: paired ? WiamColors.tealDeepLight : WiamColors.coralDeep),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                paired ? 'جهاز الطفل مرتبط بهذا الحساب' : 'لم يتم ربط جهاز الطفل بعد — اضغط هنا للربط',
+                style: bodyFont(fontSize: 13, fontWeight: FontWeight.w700, color: paired ? WiamColors.tealDeepLight : WiamColors.coralDeep),
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

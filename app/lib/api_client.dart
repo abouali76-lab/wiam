@@ -56,4 +56,9 @@ class ApiClient {
     );
     return _decode(res);
   }
+
+  Future<dynamic> delete(String path, {bool asParent = false, bool asChild = false}) async {
+    final res = await http.delete(Uri.parse('$baseUrl$path'), headers: _headers(asParent: asParent, asChild: asChild));
+    return _decode(res);
+  }
 }

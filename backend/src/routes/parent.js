@@ -143,6 +143,15 @@ router.get("/children/:childId/state", requireOwnChild, async (req, res) => {
   res.json(await computeChildState(req.targetChild.id));
 });
 
+// Soft-delete: the task stops appearing (and stops being asked of the
+// child) but its past completion history is left alone rather than erased.
+router.delete("/children/:childId/tasks/:taskId", requireOwnChild, async (req, res) => {
+  const task = await prisma.task.findUnique({ where: { id: req.params.taskId } });
+  if (!task || task.childId !== req.targetChild.id) return res.status(404).json({ error: "task_not_found" });
+  await prisma.task.update({ where: { id: task.id }, data: { active: false } });
+  res.json(await computeChildState(req.targetChild.id));
+});
+
 // Manual confirmation for an EXTERNAL task — the parent's half of the
 // hybrid verification model (digital tasks self-verify from the child app).
 router.post("/tasks/:taskId/confirm", async (req, res) => {
@@ -168,18 +177,29 @@ router.post("/tasks/:taskId/confirm", async (req, res) => {
 
 // --- Emergency "Time Freeze" -------------------------------------------
 
-// Freezing just writes server state; the child device discovers it on its
-// next poll (GET /api/child/session). That means an offline iPad picks up
-// the freeze automatically the moment it reconnects — no separate command
-// queue needed.
+// Freezing sets a standing lock on the child (independent of any one
+// PlaySession) and, if a session happens to be open right now, ends it
+// immediately too. The child device discovers both on its next poll (GET
+// /api/child/session, /api/child/state) — an offline iPad picks up the
+// freeze automatically the moment it reconnects, no command queue needed.
+// Because the lock is standing, it also blocks the child from starting a
+// brand new session while frozen (see routes/child.js `/session/start`),
+// not just cutting off one already in progress.
 router.post("/children/:childId/freeze", requireOwnChild, async (req, res) => {
+  await prisma.child.update({ where: { id: req.targetChild.id }, data: { frozen: true } });
   const session = await prisma.playSession.findFirst({
     where: { childId: req.targetChild.id, endedAt: null, frozenAt: null },
     orderBy: { startedAt: "desc" },
   });
-  if (!session) return res.status(404).json({ error: "no_active_session" });
-  const updated = await prisma.playSession.update({ where: { id: session.id }, data: { frozenAt: new Date() } });
-  res.json(updated);
+  if (session) {
+    await prisma.playSession.update({ where: { id: session.id }, data: { frozenAt: new Date() } });
+  }
+  res.json(await computeChildState(req.targetChild.id));
+});
+
+router.post("/children/:childId/unfreeze", requireOwnChild, async (req, res) => {
+  await prisma.child.update({ where: { id: req.targetChild.id }, data: { frozen: false } });
+  res.json(await computeChildState(req.targetChild.id));
 });
 
 module.exports = router;

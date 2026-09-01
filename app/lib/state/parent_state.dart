@@ -120,6 +120,16 @@ class ParentAppState extends ChangeNotifier {
     await refreshChildren();
   }
 
+  Future<void> unfreeze(String childId) async {
+    await api.post('/api/parent/children/$childId/unfreeze', asParent: true);
+    await refreshChildren();
+  }
+
+  Future<void> deleteTask(String childId, String taskId) async {
+    await api.delete('/api/parent/children/$childId/tasks/$taskId', asParent: true);
+    await refreshChildren();
+  }
+
   Future<void> logout() async {
     api.parentToken = null;
     loggedIn = false;

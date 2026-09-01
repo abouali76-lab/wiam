@@ -52,7 +52,7 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
     final done = state.tasks.where((t) => t.isDone).length;
     final total = state.tasks.length;
     final ratio = total == 0 ? 0.0 : done / total;
-    final canPlay = state.availableSeconds > 0;
+    final canPlay = state.availableSeconds > 0 && !state.frozen;
 
     // A task just got completed since the last build — celebrate it. Guard
     // with _lastDone >= 0 so the very first load (going from "unknown" to
@@ -84,15 +84,22 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
                       height: 240,
                       child: Stack(alignment: Alignment.center, children: [
                         _Planet(locked: !canPlay),
-                        Positioned(top: 0, child: Mascot(mood: canPlay ? MascotMood.happy : MascotMood.waiting, size: 76)),
+                        Positioned(top: 0, child: Mascot(mood: canPlay ? MascotMood.happy : (state.frozen ? MascotMood.sleepy : MascotMood.waiting), size: 76)),
                         Positioned.fill(child: ConfettiBurst(trigger: _confettiTrigger)),
                       ]),
                     ),
                     const SizedBox(height: 20),
-                    Text('كوكب الألعاب يستمد طاقته من إنجازاتك!',
-                        textAlign: TextAlign.center, style: displayFont(fontSize: 26, fontWeight: FontWeight.w700, color: WiamColors.ink, height: 1.3)),
+                    Text(
+                      state.frozen ? 'كوكب الألعاب مغلق مؤقتاً من قبل ولي الأمر' : 'كوكب الألعاب يستمد طاقته من إنجازاتك!',
+                      textAlign: TextAlign.center,
+                      style: displayFont(fontSize: 26, fontWeight: FontWeight.w700, color: WiamColors.ink, height: 1.3),
+                    ),
                     const SizedBox(height: 8),
-                    Text('أكمل مهامك اليوم لتفتح بوابة اللعب', textAlign: TextAlign.center, style: bodyFont(fontSize: 15, color: WiamColors.inkMuted)),
+                    Text(
+                      state.frozen ? 'اسأل ولي أمرك متى يمكنك اللعب مجدداً' : 'أكمل مهامك اليوم لتفتح بوابة اللعب',
+                      textAlign: TextAlign.center,
+                      style: bodyFont(fontSize: 15, color: WiamColors.inkMuted),
+                    ),
                     const SizedBox(height: 28),
                     Container(
                       width: double.infinity,
@@ -141,7 +148,9 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
                               const Icon(Icons.star_rounded, color: Color(0xFF3D2A0E), size: 20),
                               const SizedBox(width: 10),
                               Text(
-                                canPlay ? '${(state.availableSeconds / 60).ceil()} دقيقة لعب بانتظارك' : 'أكمل مهامك لفتح اللعب',
+                                canPlay
+                                    ? '${(state.availableSeconds / 60).ceil()} دقيقة لعب بانتظارك'
+                                    : (state.frozen ? 'اللعب مغلق مؤقتاً' : 'أكمل مهامك لفتح اللعب'),
                                 style: bodyFont(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E)),
                               ),
                             ]),

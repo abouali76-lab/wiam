@@ -26,6 +26,10 @@ model Child {
   name        String
   timezone    String        @default("Asia/Riyadh")
   deviceToken String?       @unique
+  // A standing lock the parent can set at any time — independent of any
+  // particular PlaySession. Blocks starting a new session and force-ends
+  // whatever session is already open (see routes/parent.js `/freeze`).
+  frozen      Boolean       @default(false)
   // Short-lived, human-typeable pairing code (see routes/child.js `/pair`).
   // Deliberately NOT the long-term credential — a 6-digit code is far too
   // weak to be a permanent auth secret, so it only ever gets exchanged once

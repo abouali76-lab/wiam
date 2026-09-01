@@ -56,6 +56,9 @@ router.post("/tasks/:taskId/complete-digital", async (req, res) => {
 // from `startedAt` on every later read — the device clock is never trusted.
 router.post("/session/start", async (req, res) => {
   const state = await computeChildState(req.child.id);
+  if (state.frozen) {
+    return res.status(403).json({ error: "frozen_by_parent" });
+  }
   if (state.activeSession && !state.activeSession.ended) {
     return res.json(state.activeSession);
   }

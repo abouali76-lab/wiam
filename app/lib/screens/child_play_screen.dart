@@ -8,6 +8,7 @@ import '../widgets/bubble_pop_game.dart';
 import '../widgets/memory_match_game.dart';
 import '../widgets/star_catch_game.dart';
 import 'child_timeup_screen.dart';
+import 'parent_entry_screen.dart';
 
 enum _Game { memory, stars, bubbles }
 
@@ -108,6 +109,36 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
     }
   }
 
+  void _showAccountMenu() {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('حساب ولي الأمر', style: bodyFont(fontWeight: FontWeight.w700)),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ParentEntryScreen()));
+            },
+            child: Row(children: [
+              const Icon(Icons.login, size: 20, color: WiamColors.inkMuted),
+              const SizedBox(width: 12),
+              Text('الدخول كولي أمر', style: bodyFont(fontSize: 15)),
+            ]),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx),
+            child: Row(children: [
+              const Icon(Icons.close, size: 20, color: WiamColors.inkMuted),
+              const SizedBox(width: 12),
+              Text('إغلاق', style: bodyFont(fontSize: 15)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showLevelDialog({required String title, required String message, required Color color}) {
     showDialog(
       context: context,
@@ -159,44 +190,50 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
     // Warn gently in the last two minutes rather than cutting off abruptly.
     final soon = remaining <= 120;
 
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [WiamColors.bg1, WiamColors.bg2])),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(children: [
-                Row(children: [
-                  const SizedBox(width: 44),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(color: WiamColors.card.withValues(alpha: 0.9), border: Border.all(color: WiamColors.cardLine), borderRadius: BorderRadius.circular(22)),
-                    child: Column(children: [
-                      SizedBox(
-                        width: 70,
-                        height: 70,
-                        child: Stack(alignment: Alignment.center, children: [
-                          SizedBox(
-                            width: 70,
-                            height: 70,
-                            child: CircularProgressIndicator(value: ratio, strokeWidth: 6, backgroundColor: WiamColors.planetDim, color: soon ? WiamColors.coral : WiamColors.amber),
-                          ),
-                          Text(_fmt(remaining), style: displayFont(fontSize: 15, fontWeight: FontWeight.w700, color: WiamColors.ink)),
-                        ]),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(soon ? 'الوقت أوشك على الانتهاء' : 'الوقت المتبقي', style: bodyFont(fontSize: 10.5, color: WiamColors.inkMuted)),
-                    ]),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 44),
-                ]),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [WiamColors.bg1, WiamColors.bg2])),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(children: [
+              Row(children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, color: WiamColors.inkMuted),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(color: WiamColors.card.withValues(alpha: 0.9), border: Border.all(color: WiamColors.cardLine), borderRadius: BorderRadius.circular(22)),
+                  child: Column(children: [
+                    SizedBox(
+                      width: 70,
+                      height: 70,
+                      child: Stack(alignment: Alignment.center, children: [
+                        SizedBox(
+                          width: 70,
+                          height: 70,
+                          child: CircularProgressIndicator(value: ratio, strokeWidth: 6, backgroundColor: WiamColors.planetDim, color: soon ? WiamColors.coral : WiamColors.amber),
+                        ),
+                        Text(_fmt(remaining), style: displayFont(fontSize: 15, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                      ]),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(soon ? 'الوقت أوشك على الانتهاء' : 'الوقت المتبقي', style: bodyFont(fontSize: 10.5, color: WiamColors.inkMuted)),
+                  ]),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.person_outline, color: WiamColors.inkMuted),
+                  onPressed: _showAccountMenu,
+                ),
+              ]),
+              const SizedBox(height: 16),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     for (final game in _games) ...[
                       _GameTab(info: game, level: _levels[game.storageKey]!, selected: _selected == game.id, onTap: () => setState(() => _selected = game.id)),
@@ -204,22 +241,22 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
                     ],
                   ],
                 ),
-                Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 16),
-                    width: double.infinity,
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(28), border: Border.all(color: WiamColors.planetDim, width: 2), color: WiamColors.bg1.withValues(alpha: 0.5)),
-                    clipBehavior: Clip.antiAlias,
-                    child: !_levelsLoaded
-                        ? const Center(child: CircularProgressIndicator(color: WiamColors.amber))
-                        : AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: _buildGame(_games.firstWhere((g) => g.id == _selected)),
-                          ),
-                  ),
+              ),
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 16),
+                  width: double.infinity,
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(28), border: Border.all(color: WiamColors.planetDim, width: 2), color: WiamColors.bg1.withValues(alpha: 0.5)),
+                  clipBehavior: Clip.antiAlias,
+                  child: !_levelsLoaded
+                      ? const Center(child: CircularProgressIndicator(color: WiamColors.amber))
+                      : AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: _buildGame(_games.firstWhere((g) => g.id == _selected)),
+                        ),
                 ),
-              ]),
-            ),
+              ),
+            ]),
           ),
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../state/child_device_state.dart';
 import '../theme.dart';
+import '../widgets/mascot.dart';
 import 'child_lock_screen.dart';
 
 class ChildTimeUpScreen extends StatelessWidget {
@@ -19,12 +20,7 @@ class ChildTimeUpScreen extends StatelessWidget {
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               const Icon(Icons.nightlight_round, color: WiamColors.inkMuted, size: 30),
               const SizedBox(height: 24),
-              Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: WiamColors.card, border: Border.all(color: WiamColors.cardLine, width: 2)),
-                child: const Icon(Icons.emoji_emotions_outlined, color: WiamColors.inkMuted, size: 60),
-              ),
+              const Mascot(mood: MascotMood.sleepy, size: 140),
               const SizedBox(height: 28),
               Text('لقد نفدت طاقة الكوكب اليوم!', textAlign: TextAlign.center, style: displayFont(fontSize: 26, fontWeight: FontWeight.w700, color: WiamColors.ink)),
               const SizedBox(height: 10),

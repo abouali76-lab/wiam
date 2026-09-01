@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'confetti_burst.dart';
 
 class _CardModel {
   final int pairId;
@@ -35,6 +36,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
   List<int> flippedIndexes = [];
   bool locked = false;
   int moves = 0;
+  int _winTrigger = 0;
 
   @override
   void initState() {
@@ -78,6 +80,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
         cards[a].matched = true;
         cards[b].matched = true;
         locked = false;
+        if (won) _winTrigger++;
       });
     } else {
       await Future.delayed(const Duration(milliseconds: 700));
@@ -115,22 +118,25 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
           Positioned.fill(
             child: Container(
               color: WiamColors.bg2.withValues(alpha: 0.85),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.celebration_rounded, color: WiamColors.amber, size: 42),
-                    const SizedBox(height: 12),
-                    Text('أحسنت! أنهيت اللعبة', style: displayFont(fontSize: 20, fontWeight: FontWeight.w700, color: WiamColors.ink)),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: WiamColors.amber),
-                      onPressed: _newGame,
-                      child: Text('العب مرة أخرى', style: bodyFont(fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E))),
-                    ),
-                  ],
+              child: Stack(children: [
+                Positioned.fill(child: ConfettiBurst(trigger: _winTrigger)),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.celebration_rounded, color: WiamColors.amber, size: 42),
+                      const SizedBox(height: 12),
+                      Text('أحسنت! أنهيت اللعبة', style: displayFont(fontSize: 20, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: WiamColors.amber),
+                        onPressed: _newGame,
+                        child: Text('العب مرة أخرى', style: bodyFont(fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E))),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ]),
             ),
           ),
       ],

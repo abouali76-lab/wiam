@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../models.dart';
 import '../state/child_device_state.dart';
 import '../theme.dart';
+import '../widgets/confetti_burst.dart';
+import '../widgets/mascot.dart';
 import 'child_play_screen.dart';
 import 'parent_entry_screen.dart';
 
@@ -17,6 +19,8 @@ class ChildLockScreen extends StatefulWidget {
 
 class _ChildLockScreenState extends State<ChildLockScreen> {
   Timer? _poller;
+  int _lastDone = -1;
+  int _confettiTrigger = 0;
 
   @override
   void initState() {
@@ -50,6 +54,16 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
     final ratio = total == 0 ? 0.0 : done / total;
     final canPlay = state.availableSeconds > 0;
 
+    // A task just got completed since the last build — celebrate it. Guard
+    // with _lastDone >= 0 so the very first load (going from "unknown" to
+    // whatever the server already has) doesn't fire a burst on its own.
+    if (_lastDone >= 0 && done > _lastDone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _confettiTrigger++);
+      });
+    }
+    _lastDone = done;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [WiamColors.bg1, WiamColors.bg2])),
@@ -66,7 +80,14 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
                 child: SingleChildScrollView(
                   child: Column(children: [
                     const SizedBox(height: 12),
-                    _Planet(locked: !canPlay),
+                    SizedBox(
+                      height: 240,
+                      child: Stack(alignment: Alignment.center, children: [
+                        _Planet(locked: !canPlay),
+                        Positioned(top: 0, child: Mascot(mood: canPlay ? MascotMood.happy : MascotMood.waiting, size: 76)),
+                        Positioned.fill(child: ConfettiBurst(trigger: _confettiTrigger)),
+                      ]),
+                    ),
                     const SizedBox(height: 20),
                     Text('كوكب الألعاب يستمد طاقته من إنجازاتك!',
                         textAlign: TextAlign.center, style: displayFont(fontSize: 26, fontWeight: FontWeight.w700, color: WiamColors.ink, height: 1.3)),
@@ -88,30 +109,43 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
                         const SizedBox(height: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(value: ratio, minHeight: 7, backgroundColor: WiamColors.planetDim.withValues(alpha: 0.4), color: WiamColors.amber),
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: ratio),
+                            duration: const Duration(milliseconds: 500),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, _) =>
+                                LinearProgressIndicator(value: value, minHeight: 7, backgroundColor: WiamColors.planetDim.withValues(alpha: 0.4), color: WiamColors.amber),
+                          ),
                         ),
                       ]),
                     ),
                     const SizedBox(height: 24),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(999),
-                        onTap: canPlay ? _startPlay : null,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(999),
-                            gradient: LinearGradient(colors: canPlay ? [WiamColors.amber, WiamColors.amberDeep] : [WiamColors.planetDim, WiamColors.planetDim]),
-                          ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.star_rounded, color: Color(0xFF3D2A0E), size: 20),
-                            const SizedBox(width: 10),
-                            Text(
-                              canPlay ? '${(state.availableSeconds / 60).ceil()} دقيقة لعب بانتظارك' : 'أكمل مهامك لفتح اللعب',
-                              style: bodyFont(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E)),
+                    TweenAnimationBuilder<double>(
+                      key: ValueKey(state.availableSeconds),
+                      tween: Tween(begin: 0.75, end: 1.0),
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.elasticOut,
+                      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(999),
+                          onTap: canPlay ? _startPlay : null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              gradient: LinearGradient(colors: canPlay ? [WiamColors.amber, WiamColors.amberDeep] : [WiamColors.planetDim, WiamColors.planetDim]),
                             ),
-                          ]),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Icon(Icons.star_rounded, color: Color(0xFF3D2A0E), size: 20),
+                              const SizedBox(width: 10),
+                              Text(
+                                canPlay ? '${(state.availableSeconds / 60).ceil()} دقيقة لعب بانتظارك' : 'أكمل مهامك لفتح اللعب',
+                                style: bodyFont(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E)),
+                              ),
+                            ]),
+                          ),
                         ),
                       ),
                     ),
@@ -236,15 +270,22 @@ class _TaskRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: task.isDone ? WiamColors.amber : Colors.transparent,
-              border: task.isDone ? null : Border.all(color: WiamColors.inkMuted, width: 2),
+          TweenAnimationBuilder<double>(
+            key: ValueKey(task.isDone),
+            tween: Tween(begin: task.isDone ? 0.4 : 1.0, end: 1.0),
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.elasticOut,
+            builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: task.isDone ? WiamColors.amber : Colors.transparent,
+                border: task.isDone ? null : Border.all(color: WiamColors.inkMuted, width: 2),
+              ),
+              child: task.isDone ? const Icon(Icons.check, size: 14, color: Color(0xFF3D2A0E)) : null,
             ),
-            child: task.isDone ? const Icon(Icons.check, size: 14, color: Color(0xFF3D2A0E)) : null,
           ),
           const SizedBox(width: 12),
           Expanded(child: Text(task.title, style: bodyFont(fontSize: 14.5, color: WiamColors.ink))),

@@ -62,4 +62,39 @@ class Storage {
     await prefs.remove(_rememberedIdentifierKey);
     await prefs.remove(_rememberedPasswordKey);
   }
+
+  // Per-game level progress on this paired device. Advancing a level is
+  // gated on a fresh day of fully-completed tasks (see ChildPlayScreen),
+  // so `lastLevelUpDate` records the child's local "YYYY-MM-DD" (from the
+  // server, same field driving the daily task reset) on which they last
+  // moved up — that's what stops leveling up twice in one sitting.
+  static Future<int> loadUnlockedLevel(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('level_unlocked_$gameId') ?? 1;
+  }
+
+  static Future<void> saveUnlockedLevel(String gameId, int level) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('level_unlocked_$gameId', level);
+  }
+
+  static Future<String?> loadLastLevelUpDate(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('level_up_date_$gameId');
+  }
+
+  static Future<void> saveLastLevelUpDate(String gameId, String date) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('level_up_date_$gameId', date);
+  }
+
+  static const _levelGameIds = ['memory', 'stars', 'bubbles'];
+
+  static Future<void> clearAllLevelProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final id in _levelGameIds) {
+      await prefs.remove('level_unlocked_$id');
+      await prefs.remove('level_up_date_$id');
+    }
+  }
 }

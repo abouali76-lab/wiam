@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/child_device_state.dart';
+import '../storage.dart';
 import '../theme.dart';
 import '../widgets/bubble_pop_game.dart';
 import '../widgets/memory_match_game.dart';
@@ -12,15 +13,16 @@ enum _Game { memory, stars, bubbles }
 
 class _GameInfo {
   final _Game id;
+  final String storageKey;
   final String label;
   final IconData icon;
-  const _GameInfo(this.id, this.label, this.icon);
+  const _GameInfo(this.id, this.storageKey, this.label, this.icon);
 }
 
 const _games = [
-  _GameInfo(_Game.memory, 'الذاكرة', Icons.grid_view_rounded),
-  _GameInfo(_Game.stars, 'التقاط النجوم', Icons.star_rounded),
-  _GameInfo(_Game.bubbles, 'الفقاعات', Icons.bubble_chart_rounded),
+  _GameInfo(_Game.memory, 'memory', 'الذاكرة', Icons.grid_view_rounded),
+  _GameInfo(_Game.stars, 'stars', 'التقاط النجوم', Icons.star_rounded),
+  _GameInfo(_Game.bubbles, 'bubbles', 'الفقاعات', Icons.bubble_chart_rounded),
 ];
 
 class ChildPlayScreen extends StatefulWidget {
@@ -34,10 +36,25 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
   bool _navigatedAway = false;
   _Game _selected = _Game.memory;
 
+  // Per-game current unlocked level and a "replay attempt" counter — bumping
+  // either forces a fresh widget instance via its ValueKey, which is the
+  // simplest way to reset a game's internal state (new shuffle, new run).
+  final Map<String, int> _levels = {for (final g in _games) g.storageKey: 1};
+  final Map<String, int> _attempts = {for (final g in _games) g.storageKey: 0};
+  bool _levelsLoaded = false;
+
   @override
   void initState() {
     super.initState();
     context.read<ChildDeviceState>().startPolling();
+    _loadLevels();
+  }
+
+  Future<void> _loadLevels() async {
+    for (final g in _games) {
+      _levels[g.storageKey] = await Storage.loadUnlockedLevel(g.storageKey);
+    }
+    if (mounted) setState(() => _levelsLoaded = true);
   }
 
   @override
@@ -52,14 +69,74 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
     return '$m:$s';
   }
 
-  Widget _buildGame() {
-    switch (_selected) {
+  Future<void> _onLevelComplete(_GameInfo game) async {
+    final device = context.read<ChildDeviceState>();
+    await device.refresh();
+    final state = device.state;
+    if (state == null) return; // couldn't confirm eligibility, don't guess
+
+    final todayAllDone = state.tasks.isNotEmpty && state.tasks.every((t) => t.isDone);
+    final lastLevelUpDate = await Storage.loadLastLevelUpDate(game.storageKey);
+    final alreadyLeveledUpToday = lastLevelUpDate == state.date;
+    final canAdvance = todayAllDone && !alreadyLeveledUpToday;
+    final currentLevel = _levels[game.storageKey]!;
+
+    if (canAdvance) {
+      final newLevel = currentLevel + 1;
+      await Storage.saveUnlockedLevel(game.storageKey, newLevel);
+      await Storage.saveLastLevelUpDate(game.storageKey, state.date);
+      if (!mounted) return;
+      setState(() {
+        _levels[game.storageKey] = newLevel;
+        _attempts[game.storageKey] = _attempts[game.storageKey]! + 1;
+      });
+      _showLevelDialog(
+        title: 'رائع! وصلت للمستوى $newLevel 🎉',
+        message: 'أحسنت! تجاوزت المستوى السابق بنجاح.',
+        color: WiamColors.amber,
+      );
+    } else {
+      if (!mounted) return;
+      setState(() => _attempts[game.storageKey] = _attempts[game.storageKey]! + 1);
+      _showLevelDialog(
+        title: 'أحسنت في هذا المستوى! ⭐',
+        message: alreadyLeveledUpToday
+            ? 'انتقلت لمستوى جديد اليوم بالفعل — عد غداً بعد إنجاز مهامك لتفتح مستوى آخر.'
+            : 'أكمل كل مهامك اليوم أولاً من "كوكب الألعاب" لتفتح المستوى التالي.',
+        color: WiamColors.teal,
+      );
+    }
+  }
+
+  void _showLevelDialog({required String title, required String message, required Color color}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(title, style: displayFont(fontSize: 18, fontWeight: FontWeight.w700, color: WiamColors.inkLight)),
+        content: Text(message, style: bodyFont(fontSize: 14, color: WiamColors.inkMutedLight, height: 1.6)),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: color),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('حسناً', style: bodyFont(fontWeight: FontWeight.w700, color: const Color(0xFF20142A))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGame(_GameInfo game) {
+    final level = _levels[game.storageKey]!;
+    final attempt = _attempts[game.storageKey]!;
+    final key = ValueKey('${game.storageKey}-$level-$attempt');
+    switch (game.id) {
       case _Game.memory:
-        return const MemoryMatchGame(key: ValueKey('memory'));
+        return MemoryMatchGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
       case _Game.stars:
-        return const StarCatchGame(key: ValueKey('stars'));
+        return StarCatchGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
       case _Game.bubbles:
-        return const BubblePopGame(key: ValueKey('bubbles'));
+        return BubblePopGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
     }
   }
 
@@ -122,7 +199,7 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     for (final game in _games) ...[
-                      _GameTab(info: game, selected: _selected == game.id, onTap: () => setState(() => _selected = game.id)),
+                      _GameTab(info: game, level: _levels[game.storageKey]!, selected: _selected == game.id, onTap: () => setState(() => _selected = game.id)),
                       if (game != _games.last) const SizedBox(width: 10),
                     ],
                   ],
@@ -133,7 +210,12 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
                     width: double.infinity,
                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(28), border: Border.all(color: WiamColors.planetDim, width: 2), color: WiamColors.bg1.withValues(alpha: 0.5)),
                     clipBehavior: Clip.antiAlias,
-                    child: AnimatedSwitcher(duration: const Duration(milliseconds: 250), child: _buildGame()),
+                    child: !_levelsLoaded
+                        ? const Center(child: CircularProgressIndicator(color: WiamColors.amber))
+                        : AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            child: _buildGame(_games.firstWhere((g) => g.id == _selected)),
+                          ),
                   ),
                 ),
               ]),
@@ -147,9 +229,10 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
 
 class _GameTab extends StatelessWidget {
   final _GameInfo info;
+  final int level;
   final bool selected;
   final VoidCallback onTap;
-  const _GameTab({required this.info, required this.selected, required this.onTap});
+  const _GameTab({required this.info, required this.level, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -164,7 +247,7 @@ class _GameTab extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(info.icon, size: 16, color: selected ? const Color(0xFF3D2A0E) : WiamColors.inkMuted),
             const SizedBox(width: 6),
-            Text(info.label, style: bodyFont(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? const Color(0xFF3D2A0E) : WiamColors.inkMuted)),
+            Text('${info.label} • $level', style: bodyFont(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? const Color(0xFF3D2A0E) : WiamColors.inkMuted)),
           ]),
         ),
       ),

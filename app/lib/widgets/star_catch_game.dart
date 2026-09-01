@@ -20,10 +20,13 @@ class _Pop {
 }
 
 /// Drag the basket along the bottom to catch falling stars. No fail state
-/// on purpose — a missed star just drifts away, so nothing punishes a
-/// child for missing a catch; the point is the satisfying catch itself.
+/// on purpose — a missed star just drifts away. Level scales the catch
+/// target and fall speed; reaching the target hands off to
+/// [onLevelComplete] instead of just resetting itself.
 class StarCatchGame extends StatefulWidget {
-  const StarCatchGame({super.key});
+  final int level;
+  final VoidCallback onLevelComplete;
+  const StarCatchGame({super.key, required this.level, required this.onLevelComplete});
 
   @override
   State<StarCatchGame> createState() => _StarCatchGameState();
@@ -37,6 +40,10 @@ class _StarCatchGameState extends State<StarCatchGame> {
   int _score = 0;
   Timer? _ticker;
   double _spawnCooldown = 0;
+  bool _reported = false;
+
+  int get _target => 4 + widget.level * 3;
+  double get _speedBoost => 1 + (widget.level - 1) * 0.12;
 
   @override
   void initState() {
@@ -51,16 +58,17 @@ class _StarCatchGameState extends State<StarCatchGame> {
   }
 
   void _tick(Timer _) {
+    if (_score >= _target) return;
     setState(() {
       _spawnCooldown -= 0.04;
       if (_spawnCooldown <= 0 && _stars.length < 6) {
         _stars.add(_FallingStar(
           x: 0.08 + _rand.nextDouble() * 0.84,
           y: -0.05,
-          speed: 0.006 + _rand.nextDouble() * 0.006,
+          speed: (0.006 + _rand.nextDouble() * 0.006) * _speedBoost,
           wobblePhase: _rand.nextDouble() * pi * 2,
         ));
-        _spawnCooldown = 0.7 + _rand.nextDouble() * 0.6;
+        _spawnCooldown = (0.7 + _rand.nextDouble() * 0.6) / _speedBoost;
       }
 
       for (final star in _stars) {
@@ -79,6 +87,13 @@ class _StarCatchGameState extends State<StarCatchGame> {
       }
       _pops.removeWhere((p) => p.age > 1);
     });
+
+    if (_score >= _target && !_reported) {
+      _reported = true;
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) widget.onLevelComplete();
+      });
+    }
   }
 
   void _updateCatcher(double localX, double width) {
@@ -87,6 +102,7 @@ class _StarCatchGameState extends State<StarCatchGame> {
 
   @override
   Widget build(BuildContext context) {
+    final cleared = _score >= _target;
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
@@ -103,46 +119,54 @@ class _StarCatchGameState extends State<StarCatchGame> {
                 child: Row(children: [
                   const Icon(Icons.star_rounded, color: WiamColors.amber, size: 18),
                   const SizedBox(width: 6),
-                  Text('$_score', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                  Text('$_score / $_target', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
                 ]),
               ),
-              for (final star in _stars)
+              Positioned(
+                top: 14,
+                left: 18,
+                child: Text('المستوى ${widget.level}', style: bodyFont(fontSize: 13, fontWeight: FontWeight.w700, color: WiamColors.inkMuted)),
+              ),
+              if (!cleared) ...[
+                for (final star in _stars)
+                  Positioned(
+                    left: star.x * w - 14,
+                    top: star.y * h - 14,
+                    child: const Icon(Icons.star_rounded, color: WiamColors.amber, size: 28),
+                  ),
+                for (final pop in _pops)
+                  Positioned(
+                    left: pop.position.dx * w - 20,
+                    top: pop.position.dy * h - 20,
+                    child: Opacity(
+                      opacity: (1 - pop.age).clamp(0, 1),
+                      child: Transform.scale(
+                        scale: 1 + pop.age,
+                        child: const Icon(Icons.auto_awesome_rounded, color: WiamColors.teal, size: 40),
+                      ),
+                    ),
+                  ),
                 Positioned(
-                  left: star.x * w - 14,
-                  top: star.y * h - 14,
-                  child: const Icon(Icons.star_rounded, color: WiamColors.amber, size: 28),
-                ),
-              for (final pop in _pops)
-                Positioned(
-                  left: pop.position.dx * w - 20,
-                  top: pop.position.dy * h - 20,
-                  child: Opacity(
-                    opacity: (1 - pop.age).clamp(0, 1),
-                    child: Transform.scale(
-                      scale: 1 + pop.age,
-                      child: const Icon(Icons.auto_awesome_rounded, color: WiamColors.teal, size: 40),
+                  left: _catcherX * w - 34,
+                  bottom: h * 0.08,
+                  child: Container(
+                    width: 68,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20), top: Radius.circular(8)),
+                      gradient: const LinearGradient(colors: [WiamColors.amber, WiamColors.amberDeep]),
+                      border: Border.all(color: WiamColors.bg1, width: 2),
                     ),
                   ),
                 ),
-              Positioned(
-                left: _catcherX * w - 34,
-                bottom: h * 0.08,
-                child: Container(
-                  width: 68,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20), top: Radius.circular(8)),
-                    gradient: const LinearGradient(colors: [WiamColors.amber, WiamColors.amberDeep]),
-                    border: Border.all(color: WiamColors.bg1, width: 2),
-                  ),
+                Positioned(
+                  bottom: 8,
+                  left: 0,
+                  right: 0,
+                  child: Text('اسحب إصبعك لتحريك السلة والتقط النجوم', textAlign: TextAlign.center, style: bodyFont(fontSize: 11.5, color: WiamColors.inkMuted)),
                 ),
-              ),
-              Positioned(
-                bottom: 8,
-                left: 0,
-                right: 0,
-                child: Text('اسحب إصبعك لتحريك السلة والتقط النجوم', textAlign: TextAlign.center, style: bodyFont(fontSize: 11.5, color: WiamColors.inkMuted)),
-              ),
+              ] else
+                const Center(child: Icon(Icons.celebration_rounded, color: WiamColors.amber, size: 48)),
             ],
           ),
         );

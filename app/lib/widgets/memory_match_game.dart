@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 
@@ -22,10 +23,14 @@ const _icons = [
 ];
 
 /// A small memory-match (concentration) game themed around the app's space
-/// motif — the actual "play" content behind the countdown timer, replacing
-/// the earlier out-of-scope placeholder.
+/// motif. Levels scale the number of pairs (2 at level 1 up to all 6 icons
+/// at level 5+); clearing a level hands off to [onLevelComplete] rather
+/// than offering its own "play again" — ChildPlayScreen owns what happens
+/// next (advance a level or ask to come back after today's tasks).
 class MemoryMatchGame extends StatefulWidget {
-  const MemoryMatchGame({super.key});
+  final int level;
+  final VoidCallback onLevelComplete;
+  const MemoryMatchGame({super.key, required this.level, required this.onLevelComplete});
 
   @override
   State<MemoryMatchGame> createState() => _MemoryMatchGameState();
@@ -37,6 +42,9 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
   bool locked = false;
   int moves = 0;
   int _winTrigger = 0;
+  bool _reported = false;
+
+  int get _pairCount => (widget.level + 1).clamp(2, _icons.length);
 
   @override
   void initState() {
@@ -45,7 +53,8 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
   }
 
   void _newGame() {
-    final pairs = [for (final icon in _icons) ...[icon, icon]];
+    final chosenIcons = _icons.sublist(0, _pairCount);
+    final pairs = [for (final icon in chosenIcons) ...[icon, icon]];
     final rand = Random();
     final entries = List.generate(pairs.length, (i) => _CardModel(i ~/ 2, pairs[i]));
     entries.shuffle(rand);
@@ -54,6 +63,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
       flippedIndexes = [];
       locked = false;
       moves = 0;
+      _reported = false;
     });
   }
 
@@ -82,6 +92,11 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
         locked = false;
         if (won) _winTrigger++;
       });
+      if (won && !_reported) {
+        _reported = true;
+        await Future.delayed(const Duration(milliseconds: 900));
+        if (mounted) widget.onLevelComplete();
+      }
     } else {
       await Future.delayed(const Duration(milliseconds: 700));
       setState(() {
@@ -100,7 +115,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
           padding: const EdgeInsets.all(18),
           child: Column(
             children: [
-              Text('لعبة الذاكرة', style: displayFont(fontSize: 18, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+              Text('لعبة الذاكرة — المستوى ${widget.level}', style: displayFont(fontSize: 18, fontWeight: FontWeight.w700, color: WiamColors.ink)),
               const SizedBox(height: 4),
               Text('طابق كل بطاقتين متشابهتين — عدد المحاولات: $moves', style: bodyFont(fontSize: 12, color: WiamColors.inkMuted)),
               const SizedBox(height: 16),
@@ -116,27 +131,14 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
         ),
         if (won)
           Positioned.fill(
-            child: Container(
-              color: WiamColors.bg2.withValues(alpha: 0.85),
-              child: Stack(children: [
-                Positioned.fill(child: ConfettiBurst(trigger: _winTrigger)),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.celebration_rounded, color: WiamColors.amber, size: 42),
-                      const SizedBox(height: 12),
-                      Text('أحسنت! أنهيت اللعبة', style: displayFont(fontSize: 20, fontWeight: FontWeight.w700, color: WiamColors.ink)),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        style: FilledButton.styleFrom(backgroundColor: WiamColors.amber),
-                        onPressed: _newGame,
-                        child: Text('العب مرة أخرى', style: bodyFont(fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E))),
-                      ),
-                    ],
-                  ),
-                ),
-              ]),
+            child: IgnorePointer(
+              child: Container(
+                color: WiamColors.bg2.withValues(alpha: 0.6),
+                child: Stack(children: [
+                  Positioned.fill(child: ConfettiBurst(trigger: _winTrigger)),
+                  const Center(child: Icon(Icons.celebration_rounded, color: WiamColors.amber, size: 48)),
+                ]),
+              ),
             ),
           ),
       ],

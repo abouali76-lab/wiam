@@ -18,10 +18,13 @@ class _Bubble {
   _Bubble({required this.x, required this.y, required this.speed, required this.size, required this.wobblePhase, required this.color});
 }
 
-/// Tap rising bubbles before they float off the top. Purely satisfying,
-/// no fail state — an un-popped bubble just drifts away.
+/// Tap rising bubbles before they float off the top. No fail state — an
+/// un-popped bubble just drifts away. Level scales the pop target and rise
+/// speed; reaching the target hands off to [onLevelComplete].
 class BubblePopGame extends StatefulWidget {
-  const BubblePopGame({super.key});
+  final int level;
+  final VoidCallback onLevelComplete;
+  const BubblePopGame({super.key, required this.level, required this.onLevelComplete});
 
   @override
   State<BubblePopGame> createState() => _BubblePopGameState();
@@ -33,6 +36,10 @@ class _BubblePopGameState extends State<BubblePopGame> {
   int _score = 0;
   Timer? _ticker;
   double _spawnCooldown = 0;
+  bool _reported = false;
+
+  int get _target => 4 + widget.level * 3;
+  double get _speedBoost => 1 + (widget.level - 1) * 0.12;
 
   @override
   void initState() {
@@ -47,30 +54,40 @@ class _BubblePopGameState extends State<BubblePopGame> {
   }
 
   void _tick(Timer _) {
+    final cleared = _score >= _target;
     setState(() {
-      _spawnCooldown -= 0.04;
-      if (_spawnCooldown <= 0 && _bubbles.where((b) => !b.popped).length < 7) {
-        _bubbles.add(_Bubble(
-          x: 0.1 + _rand.nextDouble() * 0.8,
-          y: 1.05,
-          speed: 0.004 + _rand.nextDouble() * 0.005,
-          size: 34 + _rand.nextDouble() * 22,
-          wobblePhase: _rand.nextDouble() * pi * 2,
-          color: _bubbleColors[_rand.nextInt(_bubbleColors.length)],
-        ));
-        _spawnCooldown = 0.5 + _rand.nextDouble() * 0.5;
+      if (!cleared) {
+        _spawnCooldown -= 0.04;
+        if (_spawnCooldown <= 0 && _bubbles.where((b) => !b.popped).length < 7) {
+          _bubbles.add(_Bubble(
+            x: 0.1 + _rand.nextDouble() * 0.8,
+            y: 1.05,
+            speed: (0.004 + _rand.nextDouble() * 0.005) * _speedBoost,
+            size: 34 + _rand.nextDouble() * 22,
+            wobblePhase: _rand.nextDouble() * pi * 2,
+            color: _bubbleColors[_rand.nextInt(_bubbleColors.length)],
+          ));
+          _spawnCooldown = (0.5 + _rand.nextDouble() * 0.5) / _speedBoost;
+        }
       }
 
       for (final b in _bubbles) {
         if (b.popped) {
           b.popAge += 0.05;
-        } else {
+        } else if (!cleared) {
           b.y -= b.speed;
           b.x += sin(b.y * 6 + b.wobblePhase) * 0.002;
         }
       }
       _bubbles.removeWhere((b) => (b.popped && b.popAge > 1) || (!b.popped && b.y < -0.08));
     });
+
+    if (cleared && !_reported) {
+      _reported = true;
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) widget.onLevelComplete();
+      });
+    }
   }
 
   void _pop(_Bubble b) {
@@ -83,6 +100,7 @@ class _BubblePopGameState extends State<BubblePopGame> {
 
   @override
   Widget build(BuildContext context) {
+    final cleared = _score >= _target;
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
@@ -96,40 +114,48 @@ class _BubblePopGameState extends State<BubblePopGame> {
               child: Row(children: [
                 const Icon(Icons.bubble_chart_rounded, color: WiamColors.teal, size: 18),
                 const SizedBox(width: 6),
-                Text('$_score', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                Text('$_score / $_target', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
               ]),
             ),
-            for (final b in _bubbles)
-              Positioned(
-                left: b.x * w - b.size / 2,
-                top: b.y * h - b.size / 2,
-                child: GestureDetector(
-                  onTap: () => _pop(b),
-                  child: b.popped
-                      ? Opacity(
-                          opacity: (1 - b.popAge).clamp(0, 1),
-                          child: Transform.scale(
-                            scale: 1 + b.popAge * 0.8,
-                            child: Icon(Icons.auto_awesome_rounded, color: b.color, size: b.size),
-                          ),
-                        )
-                      : Container(
-                          width: b.size,
-                          height: b.size,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(center: const Alignment(-0.3, -0.4), colors: [Colors.white.withValues(alpha: 0.5), b.color.withValues(alpha: 0.55)]),
-                            border: Border.all(color: b.color.withValues(alpha: 0.8), width: 1.5),
-                          ),
-                        ),
-                ),
-              ),
             Positioned(
-              bottom: 8,
-              left: 0,
-              right: 0,
-              child: Text('اضغط على الفقاعات قبل أن تطير', textAlign: TextAlign.center, style: bodyFont(fontSize: 11.5, color: WiamColors.inkMuted)),
+              top: 14,
+              left: 18,
+              child: Text('المستوى ${widget.level}', style: bodyFont(fontSize: 13, fontWeight: FontWeight.w700, color: WiamColors.inkMuted)),
             ),
+            if (!cleared) ...[
+              for (final b in _bubbles)
+                Positioned(
+                  left: b.x * w - b.size / 2,
+                  top: b.y * h - b.size / 2,
+                  child: GestureDetector(
+                    onTap: () => _pop(b),
+                    child: b.popped
+                        ? Opacity(
+                            opacity: (1 - b.popAge).clamp(0, 1),
+                            child: Transform.scale(
+                              scale: 1 + b.popAge * 0.8,
+                              child: Icon(Icons.auto_awesome_rounded, color: b.color, size: b.size),
+                            ),
+                          )
+                        : Container(
+                            width: b.size,
+                            height: b.size,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(center: const Alignment(-0.3, -0.4), colors: [Colors.white.withValues(alpha: 0.5), b.color.withValues(alpha: 0.55)]),
+                              border: Border.all(color: b.color.withValues(alpha: 0.8), width: 1.5),
+                            ),
+                          ),
+                  ),
+                ),
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Text('اضغط على الفقاعات قبل أن تطير', textAlign: TextAlign.center, style: bodyFont(fontSize: 11.5, color: WiamColors.inkMuted)),
+              ),
+            ] else
+              const Center(child: Icon(Icons.celebration_rounded, color: WiamColors.amber, size: 48)),
           ],
         );
       },

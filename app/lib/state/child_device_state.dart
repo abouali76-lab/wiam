@@ -71,6 +71,7 @@ class ChildDeviceState extends ChangeNotifier {
     paired = false;
     state = null;
     await Storage.clearDeviceToken();
+    await Storage.clearAllLevelProgress(); // this device may get paired to a different child next
     notifyListeners();
   }
 

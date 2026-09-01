@@ -1,7 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const { prisma } = require("../db");
-const { signParentToken, requireParent, generateDeviceToken } = require("../auth");
+const { signParentToken, requireParent, generatePairingCode } = require("../auth");
 const { computeChildState } = require("../balance");
 const { todayInTimezone } = require("../date");
 
@@ -9,19 +9,27 @@ const router = express.Router();
 
 // --- Auth ---------------------------------------------------------------
 
+// Email is required once, at signup, as the durable account identity.
+// Username is optional here — if skipped, the parent just keeps logging in
+// with email until they set one from account settings.
 router.post("/register", async (req, res) => {
-  const { email, pin, childName } = req.body;
-  if (!email || !pin || !childName) {
-    return res.status(400).json({ error: "email, pin and childName are required" });
+  const { email, username, password, childName } = req.body;
+  if (!email || !password || !childName) {
+    return res.status(400).json({ error: "email, password and childName are required" });
   }
-  const existing = await prisma.parent.findUnique({ where: { email } });
-  if (existing) return res.status(409).json({ error: "email_taken" });
+  const existingEmail = await prisma.parent.findUnique({ where: { email } });
+  if (existingEmail) return res.status(409).json({ error: "email_taken" });
+  if (username) {
+    const existingUsername = await prisma.parent.findUnique({ where: { username } });
+    if (existingUsername) return res.status(409).json({ error: "username_taken" });
+  }
 
-  const pinHash = await bcrypt.hash(pin, 10);
+  const passwordHash = await bcrypt.hash(password, 10);
   const parent = await prisma.parent.create({
     data: {
       email,
-      pinHash,
+      username: username || null,
+      passwordHash,
       children: { create: { name: childName } },
     },
     include: { children: true },
@@ -30,13 +38,30 @@ router.post("/register", async (req, res) => {
   res.json({ token: signParentToken(parent), children: parent.children });
 });
 
+// `identifier` is whatever the parent typed — could be their email or their
+// chosen username (which itself may be all digits, e.g. a phone number).
 router.post("/login", async (req, res) => {
-  const { email, pin } = req.body;
-  const parent = await prisma.parent.findUnique({ where: { email } });
+  const { identifier, password } = req.body;
+  if (!identifier || !password) return res.status(401).json({ error: "invalid_credentials" });
+
+  const parent = await prisma.parent.findFirst({
+    where: { OR: [{ email: identifier }, { username: identifier }] },
+  });
   if (!parent) return res.status(401).json({ error: "invalid_credentials" });
-  const ok = await bcrypt.compare(pin || "", parent.pinHash);
+  const ok = await bcrypt.compare(password, parent.passwordHash);
   if (!ok) return res.status(401).json({ error: "invalid_credentials" });
   res.json({ token: signParentToken(parent) });
+});
+
+router.post("/username", requireParent, async (req, res) => {
+  const { username } = req.body;
+  if (!username || username.trim().length < 3) {
+    return res.status(400).json({ error: "username_too_short" });
+  }
+  const existing = await prisma.parent.findUnique({ where: { username } });
+  if (existing && existing.id !== req.parentId) return res.status(409).json({ error: "username_taken" });
+  await prisma.parent.update({ where: { id: req.parentId }, data: { username } });
+  res.json({ username });
 });
 
 router.use(requireParent);
@@ -65,12 +90,31 @@ async function requireOwnChild(req, res, next) {
   next();
 }
 
-// Issue a fresh pairing code for the child's iPad. The child device stores
-// this token and never sees the parent's own login credentials.
-router.post("/children/:childId/device-token", requireOwnChild, async (req, res) => {
-  const deviceToken = generateDeviceToken();
-  await prisma.child.update({ where: { id: req.targetChild.id }, data: { deviceToken } });
-  res.json({ deviceToken });
+// Issue a short-lived 6-digit code the child types into the iPad's pairing
+// screen. The device exchanges it once for a real deviceToken (POST
+// /api/child/pair) — the parent's own login credentials are never involved.
+const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
+
+router.post("/children/:childId/pairing-code", requireOwnChild, async (req, res) => {
+  let pairingCode;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = generatePairingCode();
+    const clash = await prisma.child.findFirst({
+      where: { pairingCode: candidate, pairingCodeExpiresAt: { gt: new Date() } },
+    });
+    if (!clash) {
+      pairingCode = candidate;
+      break;
+    }
+  }
+  if (!pairingCode) return res.status(503).json({ error: "could_not_allocate_code" });
+
+  const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS);
+  await prisma.child.update({
+    where: { id: req.targetChild.id },
+    data: { pairingCode, pairingCodeExpiresAt: expiresAt },
+  });
+  res.json({ pairingCode, expiresAt });
 });
 
 // --- Tasks ------------------------------------------------------------

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../api_client.dart';
@@ -14,20 +15,21 @@ class ChildPairScreen extends StatefulWidget {
 }
 
 class _ChildPairScreenState extends State<ChildPairScreen> {
-  final tokenCtrl = TextEditingController();
+  final codeCtrl = TextEditingController();
   bool loading = false;
   String? error;
 
   Future<void> _pair() async {
+    if (codeCtrl.text.trim().length != 6) return;
     setState(() {
       loading = true;
       error = null;
     });
     try {
-      await context.read<ChildDeviceState>().pair(tokenCtrl.text.trim());
+      await context.read<ChildDeviceState>().pair(codeCtrl.text.trim());
       if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ChildLockScreen()));
     } on ApiException {
-      setState(() => error = 'رمز الربط غير صحيح، تأكد منه مع ولي الأمر');
+      setState(() => error = 'الرمز غير صحيح أو انتهت صلاحيته، اطلب رمزاً جديداً من ولي الأمر');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -46,12 +48,25 @@ class _ChildPairScreenState extends State<ChildPairScreen> {
             children: [
               Text('ربط هذا الآيباد', style: displayFont(fontSize: 26, fontWeight: FontWeight.w700, color: WiamColors.inkLight)),
               const SizedBox(height: 8),
-              Text('أدخل رمز الربط الذي حصلت عليه من تطبيق ولي الأمر', style: bodyFont(fontSize: 14, color: WiamColors.inkMutedLight)),
-              const SizedBox(height: 24),
-              TextField(controller: tokenCtrl, decoration: const InputDecoration(labelText: 'رمز الربط')),
+              Text('اطلب من ولي الأمر فتح "ربط آيباد" من تطبيقه، وأدخل الرمز المكوّن من 6 أرقام الظاهر لديه',
+                  style: bodyFont(fontSize: 14, color: WiamColors.inkMutedLight, height: 1.6)),
+              const SizedBox(height: 28),
+              TextField(
+                controller: codeCtrl,
+                autofocus: true,
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+                style: displayFont(fontSize: 36, fontWeight: FontWeight.w800, color: WiamColors.inkLight),
+                decoration: const InputDecoration(counterText: ''),
+                onChanged: (v) {
+                  setState(() => error = null);
+                  if (v.length == 6) _pair();
+                },
+              ),
               if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: bodyFont(color: WiamColors.coralDeep, fontSize: 13)),
+                const SizedBox(height: 16),
+                Text(error!, textAlign: TextAlign.center, style: bodyFont(color: WiamColors.coralDeep, fontSize: 13)),
               ],
               const SizedBox(height: 24),
               FilledButton(

@@ -38,4 +38,10 @@ function generateDeviceToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
-module.exports = { signParentToken, requireParent, requireChildDevice, generateDeviceToken };
+// 6 digits, human-typeable — this is a one-time pairing code, never the
+// long-term auth credential (see the schema comment on Child.pairingCode).
+function generatePairingCode() {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+module.exports = { signParentToken, requireParent, requireChildDevice, generateDeviceToken, generatePairingCode };

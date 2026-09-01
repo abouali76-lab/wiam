@@ -9,3 +9,9 @@ backend/.env
 Thumbs.db
 app/android/build/
 backend/server.log
+
+# Downloaded build artifacts (APK/IPA/app bundles) — not source
+*.apk
+*.ipa
+Runner.app.zip
+backend/prisma/test_migration.db*

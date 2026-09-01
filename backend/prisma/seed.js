@@ -2,11 +2,12 @@ const bcrypt = require("bcryptjs");
 const { prisma } = require("../src/db");
 
 async function main() {
-  const pinHash = await bcrypt.hash("1234", 10);
+  const passwordHash = await bcrypt.hash("1234", 10);
   const parent = await prisma.parent.create({
     data: {
       email: "demo@wiam.app",
-      pinHash,
+      username: "demo",
+      passwordHash,
       children: { create: { name: "أحمد" } },
     },
     include: { children: true },
@@ -21,7 +22,7 @@ async function main() {
     ],
   });
 
-  console.log("Seeded parent demo@wiam.app / pin 1234, child:", child.id);
+  console.log("Seeded parent demo@wiam.app (username: demo) / password 1234, child:", child.id);
 }
 
 main()

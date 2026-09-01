@@ -14,15 +14,22 @@ class ParentAuthScreen extends StatefulWidget {
 
 class _ParentAuthScreenState extends State<ParentAuthScreen> {
   bool isRegister = false;
-  final emailCtrl = TextEditingController();
-  final pinCtrl = TextEditingController();
+  final identifierCtrl = TextEditingController(); // login: email or username
+  final emailCtrl = TextEditingController(); // register: email
+  final usernameCtrl = TextEditingController(); // register: optional username
+  final passwordCtrl = TextEditingController();
   final childNameCtrl = TextEditingController();
 
   Future<void> _submit() async {
     final state = context.read<ParentAppState>();
     final ok = isRegister
-        ? await state.register(emailCtrl.text.trim(), pinCtrl.text.trim(), childNameCtrl.text.trim())
-        : await state.login(emailCtrl.text.trim(), pinCtrl.text.trim());
+        ? await state.register(
+            emailCtrl.text.trim(),
+            usernameCtrl.text.trim(),
+            passwordCtrl.text,
+            childNameCtrl.text.trim(),
+          )
+        : await state.login(identifierCtrl.text.trim(), passwordCtrl.text);
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ParentDashboardScreen()));
     }
@@ -35,7 +42,7 @@ class _ParentAuthScreenState extends State<ParentAuthScreen> {
       backgroundColor: WiamColors.bgLight,
       appBar: AppBar(backgroundColor: WiamColors.bgLight, elevation: 0, foregroundColor: WiamColors.inkLight),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -43,9 +50,17 @@ class _ParentAuthScreenState extends State<ParentAuthScreen> {
               Text(isRegister ? 'إنشاء حساب ولي الأمر' : 'تسجيل الدخول',
                   style: displayFont(fontSize: 26, fontWeight: FontWeight.w700, color: WiamColors.inkLight)),
               const SizedBox(height: 24),
-              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'البريد الإلكتروني'), keyboardType: TextInputType.emailAddress),
+              if (isRegister) ...[
+                TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'البريد الإلكتروني'), keyboardType: TextInputType.emailAddress),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: usernameCtrl,
+                  decoration: const InputDecoration(labelText: 'اسم مستخدم (اختياري، لتسجيل دخول أسرع لاحقاً)'),
+                ),
+              ] else
+                TextField(controller: identifierCtrl, decoration: const InputDecoration(labelText: 'البريد الإلكتروني أو اسم المستخدم')),
               const SizedBox(height: 12),
-              TextField(controller: pinCtrl, decoration: const InputDecoration(labelText: 'رمز الدخول (PIN)'), obscureText: true),
+              TextField(controller: passwordCtrl, decoration: const InputDecoration(labelText: 'كلمة المرور'), obscureText: true),
               if (isRegister) ...[
                 const SizedBox(height: 12),
                 TextField(controller: childNameCtrl, decoration: const InputDecoration(labelText: 'اسم الطفل')),

@@ -10,7 +10,11 @@ datasource db {
 model Parent {
   id        String   @id @default(cuid())
   email     String   @unique
-  pinHash   String
+  // Optional day-to-day login handle (can be any text, including digits) —
+  // email stays the durable account identity (recovery, uniqueness), the
+  // username is just a shorter thing to type/remember each time.
+  username  String?  @unique
+  passwordHash String
   createdAt DateTime @default(now())
   children  Child[]
 }
@@ -22,6 +26,12 @@ model Child {
   name        String
   timezone    String        @default("Asia/Riyadh")
   deviceToken String?       @unique
+  // Short-lived, human-typeable pairing code (see routes/child.js `/pair`).
+  // Deliberately NOT the long-term credential — a 6-digit code is far too
+  // weak to be a permanent auth secret, so it only ever gets exchanged once
+  // for a real deviceToken and then expires/clears itself.
+  pairingCode           String?   @unique
+  pairingCodeExpiresAt  DateTime?
   createdAt   DateTime      @default(now())
   tasks       Task[]
   sessions    PlaySession[]

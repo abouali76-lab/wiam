@@ -2,3 +2,4 @@ node_modules/
 dev.db
 dev.db-journal
 .env
+prisma/test_migration.db*

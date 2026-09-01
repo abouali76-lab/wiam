@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../api_client.dart';
 import '../models.dart';
 import '../state/parent_state.dart';
 import '../theme.dart';
@@ -83,25 +85,67 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
     );
   }
 
-  Future<void> _showDeviceToken(ParentChildSummary child) async {
-    // Issuing a token regenerates it server-side, invalidating any token
+  Future<void> _showPairingCode(ParentChildSummary child) async {
+    // Requesting a code regenerates it server-side, invalidating any code
     // already on screen — guard against a double-tap silently orphaning
     // whatever this dialog is about to show.
     if (_issuingDeviceToken) return;
     setState(() => _issuingDeviceToken = true);
-    final String token;
+    final PairingCode pairing;
     try {
-      token = await context.read<ParentAppState>().issueDeviceToken(child.childId);
+      pairing = await context.read<ParentAppState>().startPairing(child.childId);
     } finally {
       if (mounted) setState(() => _issuingDeviceToken = false);
     }
     if (!mounted) return;
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('ربط آيباد ${child.name}', style: bodyFont(fontWeight: FontWeight.w700)),
-        content: SelectableText(token, style: bodyFont(fontSize: 15)),
-        actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('تم'))],
+      builder: (ctx) => _PairingCodeDialog(
+        childName: child.name,
+        initial: pairing,
+        onRegenerate: () => context.read<ParentAppState>().startPairing(child.childId),
+      ),
+    );
+  }
+
+  Future<void> _showUsernameDialog() async {
+    final parentState = context.read<ParentAppState>();
+    final ctrl = TextEditingController();
+    String? dialogError;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('اسم مستخدم لدخول أسرع', style: bodyFont(fontWeight: FontWeight.w700)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('يمكنك استخدامه بدل البريد الإلكتروني عند تسجيل الدخول لاحقاً', style: bodyFont(fontSize: 12.5, color: WiamColors.inkMutedLight)),
+              const SizedBox(height: 12),
+              TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'اسم المستخدم')),
+              if (dialogError != null) ...[
+                const SizedBox(height: 8),
+                Text(dialogError!, style: bodyFont(fontSize: 12.5, color: WiamColors.coralDeep)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  await parentState.setUsername(ctrl.text.trim());
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } on ApiException catch (e) {
+                  setDialogState(() => dialogError = e.error == 'username_taken' ? 'هذا الاسم محجوز، جرّب غيره' : 'اسم قصير جداً (3 أحرف على الأقل)');
+                }
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -128,7 +172,8 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
         title: Text('مهام اليوم', style: displayFont(fontSize: 20, fontWeight: FontWeight.w700, color: WiamColors.inkLight)),
         actions: [
           IconButton(icon: const Icon(Icons.shield_outlined), tooltip: 'التحكم الفوري', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ParentFreezeScreen(child: child)))),
-          IconButton(icon: const Icon(Icons.smartphone), tooltip: 'ربط آيباد', onPressed: _issuingDeviceToken ? null : () => _showDeviceToken(child)),
+          IconButton(icon: const Icon(Icons.smartphone), tooltip: 'ربط آيباد', onPressed: _issuingDeviceToken ? null : () => _showPairingCode(child)),
+          IconButton(icon: const Icon(Icons.person_outline), tooltip: 'اسم المستخدم', onPressed: _showUsernameDialog),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -303,6 +348,108 @@ class _TaskCard extends StatelessWidget {
             Text('+${task.rewardMinutes} د', style: displayFont(fontSize: 13, fontWeight: FontWeight.w700, color: WiamColors.amberDeepLight)),
           ]),
       ]),
+    );
+  }
+}
+
+class _PairingCodeDialog extends StatefulWidget {
+  final String childName;
+  final PairingCode initial;
+  final Future<PairingCode> Function() onRegenerate;
+
+  const _PairingCodeDialog({required this.childName, required this.initial, required this.onRegenerate});
+
+  @override
+  State<_PairingCodeDialog> createState() => _PairingCodeDialogState();
+}
+
+class _PairingCodeDialogState extends State<_PairingCodeDialog> {
+  late PairingCode pairing;
+  Timer? _ticker;
+  Duration remaining = Duration.zero;
+  bool regenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    pairing = widget.initial;
+    _startTicker();
+  }
+
+  void _startTicker() {
+    _tick();
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  void _tick() {
+    final left = pairing.expiresAt.difference(DateTime.now());
+    setState(() => remaining = left.isNegative ? Duration.zero : left);
+  }
+
+  Future<void> _regenerate() async {
+    setState(() => regenerating = true);
+    try {
+      pairing = await widget.onRegenerate();
+      _startTicker();
+    } finally {
+      if (mounted) setState(() => regenerating = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final expired = remaining == Duration.zero;
+    final minutes = remaining.inMinutes.toString().padLeft(2, '0');
+    final seconds = (remaining.inSeconds % 60).toString().padLeft(2, '0');
+
+    return AlertDialog(
+      title: Text('ربط آيباد ${widget.childName}', style: bodyFont(fontWeight: FontWeight.w700)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('أدخلي هذا الرمز في تطبيق الطفل', style: bodyFont(fontSize: 13, color: WiamColors.inkMutedLight)),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: expired ? const Color(0xFFF3E7E1) : WiamColors.tealTintLight,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            // Force LTR here: inside the app's RTL context, a space-joined
+            // digit string gets bidi-reordered by the renderer, so the code
+            // shown could silently differ from the one actually stored.
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                pairing.code.split('').join(' '),
+                style: displayFont(fontSize: 34, fontWeight: FontWeight.w800, color: expired ? WiamColors.coralDeep : WiamColors.tealDeepLight),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            expired ? 'انتهت صلاحية الرمز' : 'صالح لمدة $minutes:$seconds',
+            style: bodyFont(fontSize: 12.5, color: expired ? WiamColors.coralDeep : WiamColors.inkMutedLight),
+          ),
+          if (expired) ...[
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: regenerating ? null : _regenerate,
+              child: regenerating
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('توليد رمز جديد'),
+            ),
+          ],
+        ],
+      ),
+      actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('تم'))],
     );
   }
 }

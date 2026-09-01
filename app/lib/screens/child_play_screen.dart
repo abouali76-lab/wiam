@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../state/child_device_state.dart';
 import '../theme.dart';
+import '../widgets/memory_match_game.dart';
 import 'child_timeup_screen.dart';
 
 class ChildPlayScreen extends StatefulWidget {
@@ -92,15 +93,8 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
                     margin: const EdgeInsets.only(top: 20),
                     width: double.infinity,
                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(28), border: Border.all(color: WiamColors.planetDim, width: 2), color: WiamColors.bg1.withValues(alpha: 0.5)),
-                    child: Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.videogame_asset_outlined, color: WiamColors.inkMuted, size: 40),
-                        const SizedBox(height: 12),
-                        Text('منطقة اللعب', style: displayFont(fontSize: 18, color: WiamColors.inkMuted)),
-                        const SizedBox(height: 4),
-                        Text('(محتوى اللعبة نفسه خارج نطاق هذا العرض التجريبي)', style: bodyFont(fontSize: 12, color: WiamColors.inkMuted.withValues(alpha: 0.7))),
-                      ]),
-                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: const MemoryMatchGame(),
                   ),
                 ),
               ]),

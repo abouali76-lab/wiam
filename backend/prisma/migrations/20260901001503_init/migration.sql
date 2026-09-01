@@ -2,7 +2,8 @@
 CREATE TABLE "Parent" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
-    "pinHash" TEXT NOT NULL,
+    "username" TEXT,
+    "passwordHash" TEXT NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -13,6 +14,8 @@ CREATE TABLE "Child" (
     "name" TEXT NOT NULL,
     "timezone" TEXT NOT NULL DEFAULT 'Asia/Riyadh',
     "deviceToken" TEXT,
+    "pairingCode" TEXT,
+    "pairingCodeExpiresAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Child_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Parent" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -59,7 +62,14 @@ CREATE TABLE "PlaySession" (
 CREATE UNIQUE INDEX "Parent_email_key" ON "Parent"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Parent_username_key" ON "Parent"("username");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Child_deviceToken_key" ON "Child"("deviceToken");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Child_pairingCode_key" ON "Child"("pairingCode");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "TaskCompletion_taskId_date_key" ON "TaskCompletion"("taskId", "date");
+

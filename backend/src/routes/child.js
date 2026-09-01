@@ -1,10 +1,30 @@
 const express = require("express");
 const { prisma } = require("../db");
-const { requireChildDevice } = require("../auth");
+const { requireChildDevice, generateDeviceToken } = require("../auth");
 const { computeChildState } = require("../balance");
 const { todayInTimezone } = require("../date");
 
 const router = express.Router();
+
+// Unauthenticated on purpose — the device has no token yet at pairing time.
+// Exchanges the parent-issued 6-digit code (POST /api/parent/children/:id/pairing-code)
+// for a real, long-lived deviceToken, and burns the code so it can't be reused.
+router.post("/pair", async (req, res) => {
+  const { pairingCode } = req.body;
+  if (!pairingCode) return res.status(400).json({ error: "pairing_code_required" });
+
+  const child = await prisma.child.findFirst({
+    where: { pairingCode, pairingCodeExpiresAt: { gt: new Date() } },
+  });
+  if (!child) return res.status(400).json({ error: "invalid_or_expired_code" });
+
+  const deviceToken = generateDeviceToken();
+  await prisma.child.update({
+    where: { id: child.id },
+    data: { deviceToken, pairingCode: null, pairingCodeExpiresAt: null },
+  });
+  res.json({ deviceToken });
+});
 
 router.use(requireChildDevice);
 

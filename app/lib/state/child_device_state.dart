@@ -24,9 +24,13 @@ class ChildDeviceState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> pair(String deviceToken) async {
+  /// Exchanges the 6-digit code shown on the parent's phone for a real,
+  /// long-lived device token — the code itself is never stored or reused.
+  Future<void> pair(String pairingCode) async {
+    final res = await api.post('/api/child/pair', body: {'pairingCode': pairingCode});
+    final deviceToken = res['deviceToken'] as String;
     api.deviceToken = deviceToken;
-    await refresh(); // throws ApiException if the token is invalid
+    await refresh();
     await Storage.saveDeviceToken(deviceToken);
     paired = true;
     notifyListeners();

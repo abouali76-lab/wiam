@@ -3,6 +3,12 @@ import '../api_client.dart';
 import '../models.dart';
 import '../storage.dart';
 
+class PairingCode {
+  final String code;
+  final DateTime expiresAt;
+  PairingCode({required this.code, required this.expiresAt});
+}
+
 class ParentChildSummary {
   final String childId;
   final String name;
@@ -31,19 +37,21 @@ class ParentAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> login(String email, String pin) async {
+  /// `identifier` is whatever the parent typed to log in — their email, or
+  /// the username they chose at signup (which may be all digits).
+  Future<bool> login(String identifier, String password) async {
     loading = true;
     error = null;
     notifyListeners();
     try {
-      final res = await api.post('/api/parent/login', body: {'email': email, 'pin': pin});
+      final res = await api.post('/api/parent/login', body: {'identifier': identifier, 'password': password});
       api.parentToken = res['token'];
       await Storage.saveParentToken(res['token']);
       loggedIn = true;
       await refreshChildren();
       return true;
     } on ApiException catch (e) {
-      error = e.error == 'invalid_credentials' ? 'البريد أو الرمز غير صحيح' : 'تعذر تسجيل الدخول';
+      error = e.error == 'invalid_credentials' ? 'البيانات غير صحيحة' : 'تعذر تسجيل الدخول';
       return false;
     } finally {
       loading = false;
@@ -51,19 +59,28 @@ class ParentAppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> register(String email, String pin, String childName) async {
+  Future<bool> register(String email, String username, String password, String childName) async {
     loading = true;
     error = null;
     notifyListeners();
     try {
-      final res = await api.post('/api/parent/register', body: {'email': email, 'pin': pin, 'childName': childName});
+      final res = await api.post('/api/parent/register', body: {
+        'email': email,
+        if (username.trim().isNotEmpty) 'username': username.trim(),
+        'password': password,
+        'childName': childName,
+      });
       api.parentToken = res['token'];
       await Storage.saveParentToken(res['token']);
       loggedIn = true;
       await refreshChildren();
       return true;
     } on ApiException catch (e) {
-      error = e.error == 'email_taken' ? 'هذا البريد مستخدم مسبقاً' : 'تعذر إنشاء الحساب';
+      error = switch (e.error) {
+        'email_taken' => 'هذا البريد مستخدم مسبقاً',
+        'username_taken' => 'اسم المستخدم هذا محجوز، اختر غيره',
+        _ => 'تعذر إنشاء الحساب',
+      };
       return false;
     } finally {
       loading = false;
@@ -82,9 +99,15 @@ class ParentAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> issueDeviceToken(String childId) async {
-    final res = await api.post('/api/parent/children/$childId/device-token', asParent: true);
-    return res['deviceToken'];
+  /// Lets a parent who registered with just email/password add the
+  /// shorter username later, from account settings.
+  Future<void> setUsername(String username) async {
+    await api.post('/api/parent/username', asParent: true, body: {'username': username});
+  }
+
+  Future<PairingCode> startPairing(String childId) async {
+    final res = await api.post('/api/parent/children/$childId/pairing-code', asParent: true);
+    return PairingCode(code: res['pairingCode'], expiresAt: DateTime.parse(res['expiresAt']));
   }
 
   Future<void> confirmExternalTask(String taskId) async {

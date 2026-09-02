@@ -3,13 +3,20 @@ const { prisma } = require("../db");
 const { requireChildDevice, generateDeviceToken } = require("../auth");
 const { computeChildState } = require("../balance");
 const { todayInTimezone } = require("../date");
+const { rateLimit } = require("../rate_limit");
 
 const router = express.Router();
 
+// The pairing code is only 3 digits (1000 combinations) and this endpoint is
+// unauthenticated, so without a limit an attacker could sweep the whole space
+// in seconds and steal a pairing. At 8 tries/minute a full sweep takes ~2
+// hours — far longer than the code's 3-minute lifetime.
+const pairLimiter = rateLimit({ windowMs: 60_000, max: 8, name: "pair" });
+
 // Unauthenticated on purpose — the device has no token yet at pairing time.
-// Exchanges the parent-issued 6-digit code (POST /api/parent/children/:id/pairing-code)
+// Exchanges the parent-issued 3-digit code (POST /api/parent/children/:id/pairing-code)
 // for a real, long-lived deviceToken, and burns the code so it can't be reused.
-router.post("/pair", async (req, res) => {
+router.post("/pair", pairLimiter, async (req, res) => {
   const { pairingCode } = req.body;
   if (!pairingCode) return res.status(400).json({ error: "pairing_code_required" });
 

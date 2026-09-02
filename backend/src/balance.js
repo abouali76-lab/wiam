@@ -34,7 +34,13 @@ function dateInTimezone(instant, timezone) {
 }
 
 async function consumedSecondsToday(childId, date, timezone) {
-  const sessions = await prisma.playSession.findMany({ where: { childId } });
+  // Only sessions that could possibly fall on `date` in the child's
+  // timezone matter — a 48h window covers every offset without loading the
+  // child's entire history on each poll.
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const sessions = await prisma.playSession.findMany({
+    where: { childId, startedAt: { gte: since } },
+  });
   const now = new Date();
   let total = 0;
   for (const s of sessions) {
@@ -90,10 +96,27 @@ async function computeChildState(childId) {
   const consumedSec = await consumedSecondsToday(childId, date, child.timezone);
   const availableSec = Math.max(0, earned * 60 - consumedSec);
 
-  const openSession = await prisma.playSession.findFirst({
+  let openSession = await prisma.playSession.findFirst({
     where: { childId, endedAt: null },
     orderBy: { startedAt: "desc" },
   });
+
+  // A session that has run out (or was frozen) is finished, but nothing ever
+  // wrote endedAt — so it would keep matching "the open session" forever,
+  // including on later days. Close it here, on the next read that notices.
+  if (openSession) {
+    const finished = activeSessionRemaining(openSession);
+    if (finished.ended) {
+      // Record when it actually ended (freeze time, or the moment its
+      // budget ran out) rather than when we happened to notice — this row
+      // is the history of the child's play time.
+      const expiredAt = new Date(new Date(openSession.startedAt).getTime() + openSession.durationSec * 1000);
+      openSession = await prisma.playSession.update({
+        where: { id: openSession.id },
+        data: { endedAt: openSession.frozenAt || expiredAt },
+      });
+    }
+  }
 
   return {
     childId,

@@ -9,22 +9,34 @@ class ChildDeviceState extends ChangeNotifier {
   bool paired = false;
   bool restoring = true;
   ChildState? state;
+
+  /// Set when the last poll couldn't reach the server. The child screens
+  /// keep showing the last known state and flag it rather than going blank.
+  bool offline = false;
   Timer? _poller;
 
   ChildDeviceState(this.api);
 
   Future<void> restore() async {
-    final token = await Storage.loadDeviceToken();
-    if (token != null) {
-      api.deviceToken = token;
-      paired = true;
-      await refresh();
+    try {
+      final token = await Storage.loadDeviceToken();
+      if (token != null) {
+        api.deviceToken = token;
+        paired = true;
+        await refresh();
+      }
+    } catch (_) {
+      // A device that is already paired stays paired even if the server is
+      // unreachable right now — otherwise a flaky network would dump the
+      // child back onto the pairing screen, or hang the app on its spinner.
+      offline = true;
+    } finally {
+      restoring = false;
+      notifyListeners();
     }
-    restoring = false;
-    notifyListeners();
   }
 
-  /// Exchanges the 6-digit code shown on the parent's phone for a real,
+  /// Exchanges the 3-digit code shown on the parent's phone for a real,
   /// long-lived device token — the code itself is never stored or reused.
   Future<void> pair(String pairingCode) async {
     final res = await api.post('/api/child/pair', body: {'pairingCode': pairingCode});
@@ -33,12 +45,20 @@ class ChildDeviceState extends ChangeNotifier {
     await refresh();
     await Storage.saveDeviceToken(deviceToken);
     paired = true;
+    offline = false;
     notifyListeners();
   }
 
+  /// Never throws — it runs on a timer, and an unhandled failure inside a
+  /// timer callback would take down the zone rather than the request.
   Future<void> refresh() async {
-    final res = await api.get('/api/child/state', asChild: true);
-    state = ChildState.fromJson(res);
+    try {
+      final res = await api.get('/api/child/state', asChild: true);
+      state = ChildState.fromJson(res);
+      offline = false;
+    } catch (_) {
+      offline = true;
+    }
     notifyListeners();
   }
 

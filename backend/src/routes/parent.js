@@ -4,18 +4,28 @@ const { prisma } = require("../db");
 const { signParentToken, requireParent, generatePairingCode } = require("../auth");
 const { computeChildState } = require("../balance");
 const { todayInTimezone } = require("../date");
+const { rateLimit } = require("../rate_limit");
 
 const router = express.Router();
+
+// Slows password guessing without getting in a real parent's way — a
+// mistyped password a few times in a row is normal, twenty is not.
+const loginLimiter = rateLimit({ windowMs: 5 * 60_000, max: 10, name: "login" });
+
+const MIN_PASSWORD_LENGTH = 6;
 
 // --- Auth ---------------------------------------------------------------
 
 // Email is required once, at signup, as the durable account identity.
 // Username is optional here — if skipped, the parent just keeps logging in
 // with email until they set one from account settings.
-router.post("/register", async (req, res) => {
+router.post("/register", loginLimiter, async (req, res) => {
   const { email, username, password, childName } = req.body;
   if (!email || !password || !childName) {
     return res.status(400).json({ error: "email, password and childName are required" });
+  }
+  if (String(password).length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: "password_too_short", minLength: MIN_PASSWORD_LENGTH });
   }
   const existingEmail = await prisma.parent.findUnique({ where: { email } });
   if (existingEmail) return res.status(409).json({ error: "email_taken" });
@@ -40,7 +50,7 @@ router.post("/register", async (req, res) => {
 
 // `identifier` is whatever the parent typed — could be their email or their
 // chosen username (which itself may be all digits, e.g. a phone number).
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   const { identifier, password } = req.body;
   if (!identifier || !password) return res.status(401).json({ error: "invalid_credentials" });
 

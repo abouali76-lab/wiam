@@ -22,19 +22,31 @@ class ParentAppState extends ChangeNotifier {
   bool loading = false;
   bool restoring = true;
   String? error;
+
+  /// True when the last server call failed for a reason other than the
+  /// server answering (no network, server down). Surfaced in the UI so the
+  /// parent knows the numbers on screen may be stale.
+  bool offline = false;
   List<ParentChildSummary> children = [];
 
   ParentAppState(this.api);
 
   Future<void> restoreSession() async {
-    final token = await Storage.loadParentToken();
-    if (token != null) {
-      api.parentToken = token;
-      loggedIn = true;
-      await refreshChildren();
+    try {
+      final token = await Storage.loadParentToken();
+      if (token != null) {
+        api.parentToken = token;
+        loggedIn = true;
+        await refreshChildren();
+      }
+    } catch (_) {
+      // Never let a failure here strand the app on its loading spinner —
+      // an unreachable server at launch is normal, not fatal.
+      offline = true;
+    } finally {
+      restoring = false;
+      notifyListeners();
     }
-    restoring = false;
-    notifyListeners();
   }
 
   /// `identifier` is whatever the parent typed to log in — their email, or
@@ -48,10 +60,19 @@ class ParentAppState extends ChangeNotifier {
       api.parentToken = res['token'];
       await Storage.saveParentToken(res['token']);
       loggedIn = true;
+      offline = false;
       await refreshChildren();
       return true;
     } on ApiException catch (e) {
-      error = e.error == 'invalid_credentials' ? 'البيانات غير صحيحة' : 'تعذر تسجيل الدخول';
+      error = switch (e.error) {
+        'invalid_credentials' => 'البيانات غير صحيحة',
+        'too_many_requests' => 'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة',
+        _ => 'تعذر تسجيل الدخول',
+      };
+      return false;
+    } catch (_) {
+      offline = true;
+      error = 'تعذر الاتصال بالخادم، تحقق من الشبكة';
       return false;
     } finally {
       loading = false;
@@ -73,14 +94,21 @@ class ParentAppState extends ChangeNotifier {
       api.parentToken = res['token'];
       await Storage.saveParentToken(res['token']);
       loggedIn = true;
+      offline = false;
       await refreshChildren();
       return true;
     } on ApiException catch (e) {
       error = switch (e.error) {
         'email_taken' => 'هذا البريد مستخدم مسبقاً',
         'username_taken' => 'اسم المستخدم هذا محجوز، اختر غيره',
+        'password_too_short' => 'كلمة المرور قصيرة، استخدم 6 خانات على الأقل',
+        'too_many_requests' => 'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة',
         _ => 'تعذر إنشاء الحساب',
       };
+      return false;
+    } catch (_) {
+      offline = true;
+      error = 'تعذر الاتصال بالخادم، تحقق من الشبكة';
       return false;
     } finally {
       loading = false;
@@ -88,14 +116,20 @@ class ParentAppState extends ChangeNotifier {
     }
   }
 
+  /// Refreshes the dashboard. Deliberately does not throw: it is called from
+  /// pull-to-refresh, timers and after every mutation, and a dropped
+  /// connection should show a stale-data banner rather than crash a screen.
   Future<void> refreshChildren() async {
-    final list = await api.get('/api/parent/children', asParent: true) as List;
-    children = list
-        .map((raw) {
-          final state = ChildState.fromJson(raw);
-          return ParentChildSummary(childId: state.childId, name: state.childName, state: state);
-        })
-        .toList();
+    try {
+      final list = await api.get('/api/parent/children', asParent: true) as List;
+      children = list.map((raw) {
+        final state = ChildState.fromJson(raw);
+        return ParentChildSummary(childId: state.childId, name: state.childName, state: state);
+      }).toList();
+      offline = false;
+    } catch (_) {
+      offline = true;
+    }
     notifyListeners();
   }
 

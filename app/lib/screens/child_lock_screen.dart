@@ -46,7 +46,44 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
     final state = device.state;
 
     if (state == null) {
-      return const Scaffold(backgroundColor: WiamColors.bg2, body: Center(child: CircularProgressIndicator(color: WiamColors.amber)));
+      // Paired but nothing fetched yet. If the server is unreachable this
+      // would otherwise spin forever, so offer a way out instead.
+      return Scaffold(
+        backgroundColor: WiamColors.bg2,
+        body: Center(
+          child: device.offline
+              ? Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.cloud_off_rounded, size: 46, color: WiamColors.inkMuted),
+                    const SizedBox(height: 16),
+                    Text('لا يمكن الوصول للخادم الآن',
+                        textAlign: TextAlign.center,
+                        style: displayFont(fontSize: 20, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                    const SizedBox(height: 8),
+                    Text('تحقق من الشبكة ثم أعد المحاولة',
+                        textAlign: TextAlign.center,
+                        style: bodyFont(fontSize: 14, color: WiamColors.inkMuted)),
+                    const SizedBox(height: 22),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: WiamColors.amber,
+                        foregroundColor: const Color(0xFF3D2A0E),
+                        minimumSize: const Size(180, 48),
+                      ),
+                      onPressed: () => device.refresh(),
+                      child: Text('إعادة المحاولة',
+                          style: bodyFont(fontWeight: FontWeight.w700, color: const Color(0xFF3D2A0E))),
+                    ),
+                    TextButton(
+                      onPressed: () => _showAccountMenu(context),
+                      child: Text('خيارات ولي الأمر', style: bodyFont(color: WiamColors.inkMuted)),
+                    ),
+                  ]),
+                )
+              : const CircularProgressIndicator(color: WiamColors.amber),
+        ),
+      );
     }
 
     final done = state.tasks.where((t) => t.isDone).length;

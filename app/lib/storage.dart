@@ -88,7 +88,7 @@ class Storage {
     await prefs.setString('level_up_date_$gameId', date);
   }
 
-  static const _levelGameIds = ['memory', 'stars', 'bubbles'];
+  static const _levelGameIds = ['memory', 'stars', 'bubbles', 'food', 'handwash', 'traffic'];
 
   static Future<void> clearAllLevelProgress() async {
     final prefs = await SharedPreferences.getInstance();

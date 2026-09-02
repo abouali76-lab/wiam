@@ -140,7 +140,10 @@ class _StarCatchGameState extends State<StarCatchGame> {
                 child: Row(children: [
                   const Icon(Icons.star_rounded, color: WiamColors.amber, size: 18),
                   const SizedBox(width: 6),
-                  Text('$_score / $_target', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text('$_score / $_target', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                  ),
                   if (_combo >= 3) ...[
                     const SizedBox(width: 8),
                     Text('🔥 $_combo', style: bodyFont(fontSize: 13, fontWeight: FontWeight.w700, color: WiamColors.coral)),

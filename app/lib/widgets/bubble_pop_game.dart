@@ -119,7 +119,10 @@ class _BubblePopGameState extends State<BubblePopGame> {
               child: Row(children: [
                 const Icon(Icons.bubble_chart_rounded, color: WiamColors.teal, size: 18),
                 const SizedBox(width: 6),
-                Text('$_score / $_target', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text('$_score / $_target', style: displayFont(fontSize: 16, fontWeight: FontWeight.w700, color: WiamColors.ink)),
+                ),
               ]),
             ),
             Positioned(

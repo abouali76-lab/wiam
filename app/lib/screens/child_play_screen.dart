@@ -5,12 +5,15 @@ import '../state/child_device_state.dart';
 import '../storage.dart';
 import '../theme.dart';
 import '../widgets/bubble_pop_game.dart';
+import '../widgets/healthy_food_game.dart';
+import '../widgets/handwash_game.dart';
 import '../widgets/memory_match_game.dart';
 import '../widgets/star_catch_game.dart';
+import '../widgets/traffic_light_game.dart';
 import 'child_timeup_screen.dart';
 import 'parent_entry_screen.dart';
 
-enum _Game { memory, stars, bubbles }
+enum _Game { memory, stars, bubbles, food, handwash, traffic }
 
 class _GameInfo {
   final _Game id;
@@ -24,6 +27,9 @@ const _games = [
   _GameInfo(_Game.memory, 'memory', 'الذاكرة', Icons.grid_view_rounded),
   _GameInfo(_Game.stars, 'stars', 'التقاط النجوم', Icons.star_rounded),
   _GameInfo(_Game.bubbles, 'bubbles', 'الفقاعات', Icons.bubble_chart_rounded),
+  _GameInfo(_Game.food, 'food', 'الغذاء الصحي', Icons.restaurant_menu),
+  _GameInfo(_Game.handwash, 'handwash', 'نظّف يديك', Icons.clean_hands),
+  _GameInfo(_Game.traffic, 'traffic', 'إشارة المرور', Icons.traffic),
 ];
 
 class ChildPlayScreen extends StatefulWidget {
@@ -168,6 +174,12 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
         return StarCatchGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
       case _Game.bubbles:
         return BubblePopGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
+      case _Game.food:
+        return HealthyFoodGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
+      case _Game.handwash:
+        return HandwashGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
+      case _Game.traffic:
+        return TrafficLightGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
     }
   }
 

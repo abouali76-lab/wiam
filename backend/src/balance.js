@@ -129,6 +129,7 @@ async function computeChildState(childId) {
       title: c.task.title,
       type: c.task.type,
       rewardMinutes: c.task.rewardMinutes,
+      gameId: c.task.gameId,
       proofAllowed: c.task.proofAllowed,
       status: c.status,
       verifiedBy: c.verifiedBy,

@@ -78,6 +78,26 @@ router.post("/session/start", async (req, res) => {
   res.json({ id: session.id, startedAt: session.startedAt, durationSec: session.durationSec, remainingSec: session.durationSec, frozen: false, ended: false });
 });
 
+// Closes the current session and banks whatever is left of it.
+//
+// A session's countdown is wall-clock (it has to be: the device clock is
+// never trusted, and a paused server-side timer could be gamed by going
+// offline). That means time a child spends away from the game would burn
+// their earned minutes — being called to dinner shouldn't cost them their
+// reward. The child app ends the session whenever it leaves the play
+// screen or is backgrounded, so only time actually spent playing counts;
+// the remainder stays available for later today.
+router.post("/session/end", async (req, res) => {
+  const session = await prisma.playSession.findFirst({
+    where: { childId: req.child.id, endedAt: null },
+    orderBy: { startedAt: "desc" },
+  });
+  if (session) {
+    await prisma.playSession.update({ where: { id: session.id }, data: { endedAt: new Date() } });
+  }
+  res.json(await computeChildState(req.child.id));
+});
+
 // Polled every few seconds by the child app while the play screen is open.
 router.get("/session", async (req, res) => {
   const state = await computeChildState(req.child.id);

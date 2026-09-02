@@ -50,6 +50,11 @@ model Task {
   title         String
   type          String // "digital" | "external"
   rewardMinutes Int
+  // For a digital task: which educational mini-game the child must clear a
+  // round of to complete it (see app/lib/screens/child_play_screen.dart for
+  // the ids). Null keeps the older behaviour where the child just marks the
+  // lesson done themselves.
+  gameId        String?
   proofAllowed  Boolean          @default(false)
   active        Boolean          @default(true)
   createdAt     DateTime         @default(now())

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api_client.dart';
+import '../games/game_catalog.dart';
 import '../models.dart';
 import '../state/parent_state.dart';
 import '../theme.dart';
@@ -24,14 +25,22 @@ class _TaskPreset {
   final String title;
   final int rewardMinutes;
   final bool proofAllowed;
-  const _TaskPreset(this.title, this.rewardMinutes, {this.proofAllowed = false});
+
+  /// For digital presets: the in-app activity the child must actually do.
+  final String? gameId;
+  const _TaskPreset(this.title, this.rewardMinutes, {this.proofAllowed = false, this.gameId});
 }
 
+// Each digital preset names the activity the child performs, so a "lesson"
+// is something they do rather than something they tick off.
 const _digitalPresets = [
-  _TaskPreset('درس القراءة اليومي', 15),
-  _TaskPreset('درس الرياضيات', 15),
-  _TaskPreset('نشاط المهارات الاجتماعية', 10),
-  _TaskPreset('تمرين التركيز', 10),
+  _TaskPreset('تمرين الحساب', 15, gameId: 'market'),
+  _TaskPreset('درس الغذاء الصحي', 10, gameId: 'food'),
+  _TaskPreset('تمرين التركيز والذاكرة', 10, gameId: 'memory'),
+  _TaskPreset('درس التعرف على المشاعر', 10, gameId: 'feelings'),
+  _TaskPreset('درس سلامة الطريق', 10, gameId: 'traffic'),
+  _TaskPreset('درس النظافة', 10, gameId: 'handwash'),
+  _TaskPreset('درس إعادة التدوير', 10, gameId: 'waste'),
 ];
 
 const _externalPresets = [
@@ -71,6 +80,7 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
     String type = tabIndex == 0 ? 'digital' : 'external';
     bool proofAllowed = false;
     bool saving = false;
+    String? gameId = _digitalPresets.first.gameId;
 
     await showDialog(
       context: context,
@@ -103,10 +113,25 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
                           titleCtrl.text = preset.title;
                           minutesCtrl.text = preset.rewardMinutes.toString();
                           proofAllowed = preset.proofAllowed;
+                          if (preset.gameId != null) gameId = preset.gameId;
                         }),
                       ),
                   ],
                 ),
+                if (type == 'digital') ...[
+                  const SizedBox(height: 16),
+                  Text('النشاط الذي ينجزه الطفل', style: WiamText.section),
+                  const SizedBox(height: 4),
+                  Text(
+                    'يفتح التطبيق هذه اللعبة التعليمية، ولا تُحتسب المهمة إلا بعد إنهائها فعلاً',
+                    style: bodyFont(fontSize: 11.5, color: WiamColors.inkFaintLight, height: 1.5),
+                  ),
+                  const SizedBox(height: 8),
+                  _ActivityPicker(
+                    selected: gameId,
+                    onChanged: (v) => setDialogState(() => gameId = v),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 TextField(
                   controller: titleCtrl,
@@ -155,6 +180,7 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
                             'type': type,
                             'rewardMinutes': minutes,
                             'proofAllowed': proofAllowed,
+                            if (type == 'digital' && gameId != null) 'gameId': gameId,
                           },
                         );
                       } catch (_) {
@@ -868,7 +894,9 @@ class _TaskCard extends StatelessWidget {
                 child: Text(
                   done
                       ? (task.verifiedBy == 'parent' ? 'أكّدته بنفسك' : 'تحقق تلقائي')
-                      : (task.isDigital ? 'ينتظر الطفل' : 'ينتظر تأكيدك'),
+                      : (task.isActivity
+                          ? 'نشاط: ${gameById(task.gameId)?.label ?? ''}'
+                          : (task.isDigital ? 'ينتظر الطفل' : 'ينتظر تأكيدك')),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: WiamText.caption,
@@ -997,6 +1025,90 @@ class _OfflineRetry extends StatelessWidget {
           child: const Text('إعادة المحاولة'),
         ),
       ]),
+    );
+  }
+}
+
+/// Picks which educational game a digital task makes the child play.
+/// "بدون نشاط" keeps the older behaviour where the child simply marks the
+/// lesson done — kept so a parent can still track something the app can't
+/// verify, but it is no longer the default.
+class _ActivityPicker extends StatelessWidget {
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+  const _ActivityPicker({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final g in kGames)
+          _ActivityChip(
+            label: g.label,
+            icon: g.icon,
+            color: g.color,
+            selected: selected == g.id,
+            onTap: () => onChanged(g.id),
+          ),
+        _ActivityChip(
+          label: 'بدون نشاط',
+          icon: Icons.check_box_outlined,
+          color: WiamColors.inkMutedLight,
+          selected: selected == null,
+          onTap: () => onChanged(null),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivityChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ActivityChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(WiamRadius.chip),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? color.withValues(alpha: 0.16) : WiamColors.bgLightAlt,
+            borderRadius: BorderRadius.circular(WiamRadius.chip),
+            border: Border.all(
+              color: selected ? color : WiamColors.lineLight,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: selected ? color : WiamColors.inkMutedLight),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: bodyFont(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected ? color : WiamColors.inkMutedLight,
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

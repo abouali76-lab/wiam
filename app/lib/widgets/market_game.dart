@@ -153,16 +153,20 @@ class _MarketGameState extends State<MarketGame> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _Basket(count: _left, fruit: _fruit, faded: false),
+                                  // Flexible so the baskets shrink (and their
+                                  // fruit wraps onto a second row) instead of
+                                  // overflowing once the counts grow at higher
+                                  // levels.
+                                  Flexible(child: _Basket(count: _left, fruit: _fruit, faded: false)),
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
                                     child: Text(
                                       _subtract ? '−' : '+',
                                       style: displayFont(
                                           fontSize: 34, fontWeight: FontWeight.w800, color: WiamColors.amber),
                                     ),
                                   ),
-                                  _Basket(count: _right, fruit: _fruit, faded: _subtract),
+                                  Flexible(child: _Basket(count: _right, fruit: _fruit, faded: _subtract)),
                                 ],
                               ),
                             ),
@@ -204,8 +208,11 @@ class _Basket extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Shrink the fruit a little once a basket holds a lot, so a full
+    // basket stays two tidy rows rather than a long thin strip.
+    final itemSize = count > 4 ? 26.0 : 30.0;
     return Container(
-      constraints: const BoxConstraints(minWidth: 92),
+      constraints: const BoxConstraints(minWidth: 84),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: WiamColors.card.withValues(alpha: 0.6),
@@ -221,10 +228,10 @@ class _Basket extends StatelessWidget {
             Opacity(
               opacity: faded ? 0.35 : 1,
               child: Stack(alignment: Alignment.center, children: [
-                FoodArt(kind: fruit, size: 30),
+                FoodArt(kind: fruit, size: itemSize),
                 if (faded)
                   Container(
-                    width: 26,
+                    width: itemSize - 4,
                     height: 2.5,
                     decoration: BoxDecoration(
                       color: WiamColors.coral,

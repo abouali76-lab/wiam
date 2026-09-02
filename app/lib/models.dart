@@ -12,6 +12,10 @@ class TaskItem {
   final String status; // "pending" | "completed"
   final String? verifiedBy;
 
+  /// For a digital task, the educational mini-game the child must clear a
+  /// round of. Null means the older "mark it done yourself" behaviour.
+  final String? gameId;
+
   TaskItem({
     required this.taskId,
     required this.title,
@@ -20,10 +24,14 @@ class TaskItem {
     required this.proofAllowed,
     required this.status,
     required this.verifiedBy,
+    required this.gameId,
   });
 
   bool get isDigital => type == 'digital';
   bool get isDone => status == 'completed';
+
+  /// True when finishing this task means actually doing something in-app.
+  bool get isActivity => isDigital && gameId != null;
 
   factory TaskItem.fromJson(Map<String, dynamic> json) => TaskItem(
         taskId: json['taskId'],
@@ -33,6 +41,7 @@ class TaskItem {
         proofAllowed: json['proofAllowed'] ?? false,
         status: json['status'],
         verifiedBy: json['verifiedBy'],
+        gameId: json['gameId'],
       );
 }
 

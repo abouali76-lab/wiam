@@ -72,6 +72,20 @@ class ChildDeviceState extends ChangeNotifier {
     await refresh();
   }
 
+  /// Banks whatever is left of the open session so time away from the game
+  /// isn't charged against the child's earned minutes. Safe to call when
+  /// there is no session — the server treats it as a no-op — and safe to
+  /// call while shutting down, hence it never throws.
+  Future<void> endSession() async {
+    try {
+      await api.post('/api/child/session/end', asChild: true);
+      await refresh();
+    } catch (_) {
+      offline = true;
+      notifyListeners();
+    }
+  }
+
   /// Polls the session endpoint while a play screen is on-screen. The
   /// remaining time always comes from the server — the device clock is
   /// never trusted to drive the countdown.

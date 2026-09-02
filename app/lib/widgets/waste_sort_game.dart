@@ -148,14 +148,17 @@ class _WasteSortGameState extends State<WasteSortGame> {
               ),
               if (!cleared)
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
+                    // Expanded so three bins always share the width evenly
+                    // instead of overflowing on a narrow screen.
                     for (final bin in WasteBin.values)
-                      _BinButton(
-                        bin: bin,
-                        wrong: _wrongBin == bin,
-                        right: _rightBin == bin,
-                        onTap: () => _pick(bin),
+                      Expanded(
+                        child: _BinButton(
+                          bin: bin,
+                          wrong: _wrongBin == bin,
+                          right: _rightBin == bin,
+                          onTap: () => _pick(bin),
+                        ),
                       ),
                   ],
                 ),

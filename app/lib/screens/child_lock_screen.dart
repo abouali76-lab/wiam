@@ -7,6 +7,7 @@ import '../state/child_device_state.dart';
 import '../theme.dart';
 import '../widgets/confetti_burst.dart';
 import '../widgets/mascot.dart';
+import 'child_activity_screen.dart';
 import 'child_play_screen.dart';
 import 'parent_entry_screen.dart';
 
@@ -32,6 +33,20 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
   void dispose() {
     _poller?.cancel();
     super.dispose();
+  }
+
+  /// A digital task bound to a game is *performed*: open that game and let
+  /// clearing a round be what completes the task. Older tasks with no game
+  /// keep the simple "mark it done" behaviour.
+  Future<void> _startTask(TaskItem task) async {
+    if (task.isActivity) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ChildActivityScreen(task: task)),
+      );
+      if (mounted) await context.read<ChildDeviceState>().refresh();
+      return;
+    }
+    await context.read<ChildDeviceState>().completeDigitalTask(task.taskId);
   }
 
   Future<void> _startPlay() async {
@@ -149,7 +164,11 @@ class _ChildLockScreenState extends State<ChildLockScreen> {
                           Text('أُنجز $done من $total', style: bodyFont(fontSize: 12.5, color: WiamColors.inkMuted)),
                         ]),
                         const SizedBox(height: 8),
-                        for (final task in state.tasks) _TaskRow(task: task, onTapDigital: task.isDigital && !task.isDone ? () => device.completeDigitalTask(task.taskId) : null),
+                        for (final task in state.tasks)
+                          _TaskRow(
+                            task: task,
+                            onTapDigital: task.isDigital && !task.isDone ? () => _startTask(task) : null,
+                          ),
                         const SizedBox(height: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(999),
@@ -334,16 +353,32 @@ class _TaskRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(task.title, style: bodyFont(fontSize: 14.5, color: WiamColors.ink))),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(task.title, style: bodyFont(fontSize: 14.5, color: WiamColors.ink)),
+              const SizedBox(height: 2),
+              Text(
+                task.isDone ? (task.isDigital ? 'تحقق تلقائي' : 'أكّده ولي الأمر') : (task.isDigital ? 'اضغط لبدء النشاط' : 'بانتظار ولي الأمر'),
+                style: bodyFont(fontSize: 10.5, color: task.isDigital ? WiamColors.teal : WiamColors.inkMuted),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          // The child is the one earning, so they should be able to see the
+          // price of each task rather than only the parent seeing it.
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: task.isDigital ? WiamColors.teal.withValues(alpha: 0.18) : WiamColors.inkMuted.withValues(alpha: 0.15),
+              color: task.isDone ? WiamColors.amber.withValues(alpha: 0.22) : WiamColors.inkMuted.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
-              task.isDone ? (task.isDigital ? 'تحقق تلقائي' : 'تم') : (task.isDigital ? 'اضغط لإنهاء الدرس' : 'بانتظار ولي الأمر'),
-              style: bodyFont(fontSize: 10.5, color: task.isDigital ? WiamColors.teal : WiamColors.inkMuted),
+              '+${task.rewardMinutes} د',
+              style: bodyFont(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: task.isDone ? WiamColors.amber : WiamColors.inkMuted,
+              ),
             ),
           ),
         ]),

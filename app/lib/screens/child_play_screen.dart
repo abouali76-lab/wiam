@@ -1,47 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../games/game_catalog.dart';
 import '../state/child_device_state.dart';
 import '../storage.dart';
 import '../theme.dart';
-import '../widgets/bubble_pop_game.dart';
-import '../widgets/feelings_game.dart';
-import '../widgets/healthy_food_game.dart';
-import '../widgets/handwash_game.dart';
-import '../widgets/market_game.dart';
-import '../widgets/memory_match_game.dart';
-import '../widgets/star_catch_game.dart';
-import '../widgets/traffic_light_game.dart';
-import '../widgets/waste_sort_game.dart';
 import 'child_timeup_screen.dart';
 import 'parent_entry_screen.dart';
-
-enum _Game { memory, stars, bubbles, food, handwash, traffic, waste, feelings, market }
-
-class _GameInfo {
-  final _Game id;
-  final String storageKey;
-  final String label;
-
-  /// What the game is actually teaching — shown on the card so a parent
-  /// glancing over the child's shoulder can see this is not just filler.
-  final String tag;
-  final IconData icon;
-  final Color color;
-  const _GameInfo(this.id, this.storageKey, this.label, this.tag, this.icon, this.color);
-}
-
-const _games = [
-  _GameInfo(_Game.memory, 'memory', 'الذاكرة', 'تركيز', Icons.grid_view_rounded, Color(0xFF7B6BC4)),
-  _GameInfo(_Game.stars, 'stars', 'التقاط النجوم', 'تناسق حركي', Icons.star_rounded, Color(0xFFE0A93F)),
-  _GameInfo(_Game.bubbles, 'bubbles', 'الفقاعات', 'سرعة بديهة', Icons.bubble_chart_rounded, Color(0xFF4E9FC4)),
-  _GameInfo(_Game.food, 'food', 'الغذاء الصحي', 'تغذية', Icons.restaurant_menu, Color(0xFF5FAE72)),
-  _GameInfo(_Game.handwash, 'handwash', 'نظّف يديك', 'نظافة', Icons.clean_hands, Color(0xFF4EAFA8)),
-  _GameInfo(_Game.traffic, 'traffic', 'إشارة المرور', 'سلامة', Icons.traffic, Color(0xFFD9645A)),
-  _GameInfo(_Game.waste, 'waste', 'فرز النفايات', 'بيئة', Icons.recycling_rounded, Color(0xFF5B8FD1)),
-  _GameInfo(_Game.feelings, 'feelings', 'دائرة المشاعر', 'مشاعر', Icons.favorite_rounded, Color(0xFFD97BA0)),
-  _GameInfo(_Game.market, 'market', 'سوق المعرفة', 'حساب', Icons.storefront_rounded, Color(0xFFDE9142)),
-];
 
 class ChildPlayScreen extends StatefulWidget {
   const ChildPlayScreen({super.key});
@@ -50,35 +15,56 @@ class ChildPlayScreen extends StatefulWidget {
   State<ChildPlayScreen> createState() => _ChildPlayScreenState();
 }
 
-class _ChildPlayScreenState extends State<ChildPlayScreen> {
+class _ChildPlayScreenState extends State<ChildPlayScreen> with WidgetsBindingObserver {
   bool _navigatedAway = false;
 
+  /// Guards against ending the same session twice (e.g. backgrounded and
+  /// then popped), which would otherwise fire a redundant request.
+  bool _sessionClosed = false;
+
   /// null = showing the game picker. Set = that game is on screen.
-  _Game? _selected;
+  String? _selected;
 
   // Per-game current unlocked level and a "replay attempt" counter — bumping
   // either forces a fresh widget instance via its ValueKey, which is the
   // simplest way to reset a game's internal state (new shuffle, new run).
-  final Map<String, int> _levels = {for (final g in _games) g.storageKey: 1};
-  final Map<String, int> _attempts = {for (final g in _games) g.storageKey: 0};
+  final Map<String, int> _levels = {for (final g in kGames) g.id: 1};
+  final Map<String, int> _attempts = {for (final g in kGames) g.id: 0};
   bool _levelsLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     context.read<ChildDeviceState>().startPolling();
     _loadLevels();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leaving the app mid-game shouldn't cost the child the rest of their
+    // earned time — bank it and let them resume later.
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _closeSession();
+    }
+  }
+
+  void _closeSession() {
+    if (_sessionClosed) return;
+    _sessionClosed = true;
+    context.read<ChildDeviceState>().endSession();
+  }
+
   Future<void> _loadLevels() async {
-    for (final g in _games) {
-      _levels[g.storageKey] = await Storage.loadUnlockedLevel(g.storageKey);
+    for (final g in kGames) {
+      _levels[g.id] = await Storage.loadUnlockedLevel(g.id);
     }
     if (mounted) setState(() => _levelsLoaded = true);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     context.read<ChildDeviceState>().stopPolling();
     super.dispose();
   }
@@ -89,26 +75,26 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
     return '$m:$s';
   }
 
-  Future<void> _onLevelComplete(_GameInfo game) async {
+  Future<void> _onLevelComplete(GameInfo game) async {
     final device = context.read<ChildDeviceState>();
     await device.refresh();
     final state = device.state;
     if (state == null) return; // couldn't confirm eligibility, don't guess
 
     final todayAllDone = state.tasks.isNotEmpty && state.tasks.every((t) => t.isDone);
-    final lastLevelUpDate = await Storage.loadLastLevelUpDate(game.storageKey);
+    final lastLevelUpDate = await Storage.loadLastLevelUpDate(game.id);
     final alreadyLeveledUpToday = lastLevelUpDate == state.date;
     final canAdvance = todayAllDone && !alreadyLeveledUpToday;
-    final currentLevel = _levels[game.storageKey]!;
+    final currentLevel = _levels[game.id]!;
 
     if (canAdvance) {
       final newLevel = currentLevel + 1;
-      await Storage.saveUnlockedLevel(game.storageKey, newLevel);
-      await Storage.saveLastLevelUpDate(game.storageKey, state.date);
+      await Storage.saveUnlockedLevel(game.id, newLevel);
+      await Storage.saveLastLevelUpDate(game.id, state.date);
       if (!mounted) return;
       setState(() {
-        _levels[game.storageKey] = newLevel;
-        _attempts[game.storageKey] = _attempts[game.storageKey]! + 1;
+        _levels[game.id] = newLevel;
+        _attempts[game.id] = _attempts[game.id]! + 1;
       });
       _showLevelDialog(
         title: 'رائع! وصلت للمستوى $newLevel 🎉',
@@ -117,7 +103,7 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
       );
     } else {
       if (!mounted) return;
-      setState(() => _attempts[game.storageKey] = _attempts[game.storageKey]! + 1);
+      setState(() => _attempts[game.id] = _attempts[game.id]! + 1);
       _showLevelDialog(
         title: 'أحسنت في هذا المستوى! ⭐',
         message: alreadyLeveledUpToday
@@ -176,30 +162,14 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
     );
   }
 
-  Widget _buildGame(_GameInfo game) {
-    final level = _levels[game.storageKey]!;
-    final attempt = _attempts[game.storageKey]!;
-    final key = ValueKey('${game.storageKey}-$level-$attempt');
-    switch (game.id) {
-      case _Game.memory:
-        return MemoryMatchGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.stars:
-        return StarCatchGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.bubbles:
-        return BubblePopGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.food:
-        return HealthyFoodGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.handwash:
-        return HandwashGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.traffic:
-        return TrafficLightGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.waste:
-        return WasteSortGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.feelings:
-        return FeelingsGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-      case _Game.market:
-        return MarketGame(key: key, level: level, onLevelComplete: () => _onLevelComplete(game));
-    }
+  Widget _buildGame(GameInfo game) {
+    final level = _levels[game.id]!;
+    final attempt = _attempts[game.id]!;
+    return game.build(
+      key: ValueKey('${game.id}-$level-$attempt'),
+      level: level,
+      onComplete: () => _onLevelComplete(game),
+    );
   }
 
   /// Back steps out of a game to the picker first, and only leaves the play
@@ -209,6 +179,9 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
     if (_selected != null) {
       setState(() => _selected = null);
     } else {
+      // Leaving the play screen banks the unused time rather than letting
+      // the countdown keep running against the child.
+      _closeSession();
       Navigator.of(context).pop();
     }
   }
@@ -231,7 +204,7 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
     final ratio = (remaining / total).clamp(0, 1).toDouble();
     // Warn gently in the last two minutes rather than cutting off abruptly.
     final soon = remaining <= 120;
-    final game = _selected == null ? null : _games.firstWhere((g) => g.id == _selected);
+    final game = _selected == null ? null : gameById(_selected);
 
     return Scaffold(
       body: Container(
@@ -305,7 +278,7 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
                                 onPick: (g) => setState(() => _selected = g.id),
                               )
                             : Container(
-                                key: ValueKey('game-${game.storageKey}'),
+                                key: ValueKey('game-${game.id}'),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(26),
                                   border: Border.all(color: game.color.withValues(alpha: 0.55), width: 2),
@@ -326,7 +299,7 @@ class _ChildPlayScreenState extends State<ChildPlayScreen> {
 
 class _GamePicker extends StatelessWidget {
   final Map<String, int> levels;
-  final ValueChanged<_GameInfo> onPick;
+  final ValueChanged<GameInfo> onPick;
   const _GamePicker({super.key, required this.levels, required this.onPick});
 
   @override
@@ -341,7 +314,7 @@ class _GamePicker extends StatelessWidget {
         Expanded(
           child: GridView.builder(
             padding: const EdgeInsets.only(bottom: 8),
-            itemCount: _games.length,
+            itemCount: kGames.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               crossAxisSpacing: 10,
@@ -349,8 +322,8 @@ class _GamePicker extends StatelessWidget {
               childAspectRatio: 0.82,
             ),
             itemBuilder: (context, i) {
-              final g = _games[i];
-              return _GameCard(info: g, level: levels[g.storageKey]!, onTap: () => onPick(g));
+              final g = kGames[i];
+              return _GameCard(info: g, level: levels[g.id]!, onTap: () => onPick(g));
             },
           ),
         ),
@@ -360,7 +333,7 @@ class _GamePicker extends StatelessWidget {
 }
 
 class _GameCard extends StatelessWidget {
-  final _GameInfo info;
+  final GameInfo info;
   final int level;
   final VoidCallback onTap;
   const _GameCard({required this.info, required this.level, required this.onTap});

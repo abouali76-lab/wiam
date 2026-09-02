@@ -132,10 +132,17 @@ router.post("/children/:childId/pairing-code", requireOwnChild, async (req, res)
 
 // --- Tasks ------------------------------------------------------------
 
+// The set of educational mini-games a digital task can be bound to. Kept
+// in sync with _games in app/lib/screens/child_play_screen.dart.
+const ACTIVITY_GAME_IDS = ["memory", "stars", "bubbles", "food", "handwash", "traffic", "waste", "feelings", "market"];
+
 router.post("/children/:childId/tasks", requireOwnChild, async (req, res) => {
-  const { title, type, rewardMinutes, proofAllowed } = req.body;
+  const { title, type, rewardMinutes, proofAllowed, gameId } = req.body;
   if (!title || !["digital", "external"].includes(type) || !Number.isFinite(rewardMinutes)) {
     return res.status(400).json({ error: "title, type ('digital'|'external') and rewardMinutes are required" });
+  }
+  if (gameId && !ACTIVITY_GAME_IDS.includes(gameId)) {
+    return res.status(400).json({ error: "unknown_game" });
   }
   const task = await prisma.task.create({
     data: {
@@ -143,6 +150,8 @@ router.post("/children/:childId/tasks", requireOwnChild, async (req, res) => {
       title,
       type,
       rewardMinutes,
+      // Only a digital task is something the child performs in-app.
+      gameId: type === "digital" ? gameId || null : null,
       proofAllowed: Boolean(proofAllowed),
     },
   });
